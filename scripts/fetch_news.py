@@ -14,6 +14,7 @@ import datetime as dt
 import hashlib
 import html
 import json
+import os
 import re
 import sys
 import time
@@ -348,6 +349,12 @@ def main():
     for s in statuses:
         if not s["ok"]:
             print(f"  ✗ {s['name']}: {s.get('error')}", file=sys.stderr)
+    if os.environ.get("GITHUB_ACTIONS"):
+        # Ergebnis als Anmerkung am Workflow-Lauf, damit es ohne Log-Download sichtbar ist
+        print(f"::notice title=Quellen::{ok}/{len(statuses)} Quellen ok")
+        failed = [f"{s['name']}: {s.get('error')}" for s in statuses if not s["ok"]]
+        if failed:
+            print("::warning title=Nicht erreichbar::" + "%0A".join(failed))
     # Nur scheitern, wenn gar nichts geklappt hat (z. B. kein Netz)
     return 0 if ok else 1
 
