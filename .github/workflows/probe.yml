@@ -1,0 +1,21 @@
+name: Quellen untersuchen (Entwicklung)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/probe.py scripts/probe_urls.txt /tmp/probe
+      - name: Ergebnis in Branch probe-output ablegen
+        run: |
+          cd /tmp/probe
+          git init -q -b probe-output
+          git add -A
+          git -c user.name=probe -c user.email=probe@example.com commit -qm "probe"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" probe-output
