@@ -1,0 +1,202 @@
+[
+ {
+  "name": "AUSA Annual Meeting",
+  "city": "Washington, D.C.",
+  "country": "US",
+  "start": "2026-10-12",
+  "end": "2026-10-14",
+  "url": "https://meetings.ausa.org/annual/2026/",
+  "note": "Größte US-Army-Messe, Soldatenausrüstung",
+  "confidence": "verified"
+ },
+ {
+  "name": "Milipol Qatar",
+  "city": "Doha",
+  "country": "QA",
+  "start": "2026-10-20",
+  "end": "2026-10-22",
+  "url": "https://www.milipolqatar.com/",
+  "note": "Innere Sicherheit, Polizeiausrüstung Golfregion",
+  "confidence": "verified"
+ },
+ {
+  "name": "Future Forces Forum",
+  "city": "Prag",
+  "country": "CZ",
+  "start": "2026-10-21",
+  "end": "2026-10-23",
+  "url": "https://www.future-forces-forum.org/",
+  "note": "Mitteleuropa, Soldatenausrüstung, NATO-Fokus",
+  "confidence": "verified"
+ },
+ {
+  "name": "International Dismounted Soldier",
+  "city": "London",
+  "country": "GB",
+  "start": "2026-12-02",
+  "end": "2026-12-03",
+  "url": "https://www.defenceiq.com/events-international-dismounted-soldier",
+  "note": "Konferenz Infanterie-Modernisierung",
+  "confidence": "unsure"
+ },
+ {
+  "name": "SHOT Show",
+  "city": "Las Vegas",
+  "country": "US",
+  "start": "2027-01-19",
+  "end": "2027-01-22",
+  "url": "https://shotshow.org/",
+  "note": "Weltgrößte Messe für Behördenausrüstung",
+  "confidence": "verified"
+ },
+ {
+  "name": "IDEX",
+  "city": "Abu Dhabi",
+  "country": "AE",
+  "start": "2027-01-25",
+  "end": "2027-01-29",
+  "url": "https://www.idexuae.ae/",
+  "note": "Größte Verteidigungsmesse im Nahen Osten",
+  "confidence": "verified"
+ },
+ {
+  "name": "Enforce Tac",
+  "city": "Nürnberg",
+  "country": "DE",
+  "start": "2027-03-01",
+  "end": "2027-03-03",
+  "url": "https://www.enforcetac.com/",
+  "note": "Kernmesse Polizei- und Militärschutzausrüstung",
+  "confidence": "verified"
+ },
+ {
+  "name": "Future Soldier Technology",
+  "city": "London",
+  "country": "GB",
+  "start": "2027-03-01",
+  "end": "2027-03-03",
+  "url": "https://www.smgconferences.com/defence/uk/conference/FUTURE-SOLDIER-TECHNOLOGY",
+  "note": "Konferenz Soldatenmodernisierung, ballistischer Schutz",
+  "confidence": "verified"
+ },
+ {
+  "name": "IWA OutdoorClassics",
+  "city": "Nürnberg",
+  "country": "DE",
+  "start": "2027-03-04",
+  "end": "2027-03-07",
+  "url": "https://www.iwa.info/",
+  "note": "Jagd, Schießsport, Behördenbezug",
+  "confidence": "verified"
+ },
+ {
+  "name": "Modern Day Marine",
+  "city": "Washington, D.C.",
+  "country": "US",
+  "start": "2027-04-13",
+  "end": "2027-04-15",
+  "url": "https://marinemilitaryexpos.com/",
+  "note": "Ausrüstungsmesse US Marine Corps",
+  "confidence": "verified"
+ },
+ {
+  "name": "GPEC digital",
+  "city": "Leipzig",
+  "country": "DE",
+  "start": "2027-04-14",
+  "end": "2027-04-15",
+  "url": "https://www.gpecdigital.com/",
+  "note": "Kleines Digitalformat, große GPEC erst 2028",
+  "confidence": "verified"
+ },
+ {
+  "name": "DSEI Japan",
+  "city": "Chiba",
+  "country": "JP",
+  "start": "2027-04-28",
+  "end": "2027-04-30",
+  "url": "https://www.dsei-japan.com/",
+  "note": "Verteidigungsmarkt Japan und Indo-Pazifik",
+  "confidence": "verified"
+ },
+ {
+  "name": "IDET",
+  "city": "Brünn",
+  "country": "CZ",
+  "start": "2027-05-26",
+  "end": "2027-05-28",
+  "url": "https://www.bvv.cz/en",
+  "note": "Tschechische Verteidigungs- und Sicherheitsmesse",
+  "confidence": "verified"
+ },
+ {
+  "name": "MSPO",
+  "city": "Kielce",
+  "country": "PL",
+  "start": "2027-08-31",
+  "end": "2027-09-03",
+  "url": "https://www.targikielce.pl/",
+  "note": "Wichtigste polnische Rüstungsmesse",
+  "confidence": "unsure"
+ },
+ {
+  "name": "DSEI",
+  "city": "London",
+  "country": "GB",
+  "start": "2027-09-07",
+  "end": "2027-09-10",
+  "url": "https://www.dsei.co.uk/",
+  "note": "Große britische Verteidigungsmesse",
+  "confidence": "verified"
+ },
+ {
+  "name": "Balt Military Expo",
+  "city": "Danzig",
+  "country": "PL",
+  "start": "2027-10-05",
+  "end": "2027-10-07",
+  "url": "https://baltexpo.eu/en/",
+  "note": "Militär und Marine Ostseeraum",
+  "confidence": "verified"
+ },
+ {
+  "name": "Milipol Paris",
+  "city": "Paris",
+  "country": "FR",
+  "start": "2027-11-16",
+  "end": "2027-11-19",
+  "url": "https://www.milipol.com/",
+  "note": "Leitmesse innere Sicherheit, Polizeischutz",
+  "confidence": "verified"
+ },
+ {
+  "name": "World Defense Show",
+  "city": "Riad",
+  "country": "SA",
+  "start": "2028-01-16",
+  "end": "2028-01-20",
+  "url": "https://www.worlddefenseshow.com/",
+  "note": "Saudische Verteidigungsmesse",
+  "confidence": "unsure"
+ },
+ {
+  "name": "Eurosatory",
+  "city": "Paris",
+  "country": "FR",
+  "start": "2028-06-19",
+  "end": "2028-06-23",
+  "url": "https://www.eurosatory.com/",
+  "note": "Weltleitmesse Landverteidigung",
+  "confidence": "unsure"
+ },
+ {
+  "name": "security essen",
+  "city": "Essen",
+  "country": "DE",
+  "start": "2028-09-19",
+  "end": "2028-09-22",
+  "url": "https://www.security-essen.de/",
+  "note": "Zivile Sicherheit, Behördenschutz am Rand",
+  "confidence": "verified"
+ }
+]
