@@ -30,10 +30,12 @@
   };
 
   const $ = (sel) => document.querySelector(sel);
-  const grid = $("#grid"), tabs = $("#tabs"), search = $("#search"), onlyNew = $("#only-new"), deutsch = $("#deutsch"), briefing = $("#briefing"), since = $("#since");
+  const grid = $("#grid"), tabs = $("#tabs"), search = $("#search"), kpis = $("#kpis"), onlyNew = $("#only-new"), deutsch = $("#deutsch"), briefing = $("#briefing"), since = $("#since");
   const lastVisit = store.get(LAST_VISIT_KEY);
   let data = null;
-  let activeTab = store.get(TAB_KEY) || "alle";
+  // Reiter aus dem Link (#ausschreibungen) hat Vorrang, damit man Ansichten teilen kann
+  let activeTab = decodeURIComponent(location.hash.slice(1)) || store.get(TAB_KEY) || "alle";
+  let fairs = [];
   const expanded = new Set();
   let tenderCountry = "";
   let saved = {};
@@ -97,6 +99,7 @@
 
   const german = () => deutsch.checked;
   const titleOf = (it) => (german() && it.ai?.title_de) || it.title;
+  const topicShort = (id) => data.topics.find((t) => t.id === id)?.short || id;
   const summaryOf = (it) => (german() && it.ai?.summary) || it.summary;
   const hotBadge = (it) => it.ai?.score >= HOT
     ? `<span class="hot" title="KI-Relevanz ${it.ai.score}/10${it.ai.why ? `: ${escapeHtml(it.ai.why)}` : ""}">🔥 wichtig</span>` : "";
@@ -115,6 +118,7 @@
     const nSaved = Object.keys(saved).length;
     tabs.innerHTML = btn("alle", "Überblick", newBadge(totalNew), "var(--text)") +
       data.topics.map((t) => btn(t.id, `${meta(t.id).icon} ${escapeHtml(t.short || t.name)}`, newBadge(t.items.filter(isNew).length), meta(t.id).color)).join("") +
+      btn("termine", "📅 Messen", "", "var(--t-konkurrenz)") +
       btn("gemerkt", "⭐ Merkliste", nSaved ? String(nSaved) : "", "var(--star)");
   }
 
@@ -151,6 +155,54 @@
       : `<span class="since-label">Seit deinem letzten Besuch (${when}) gibt es nichts Neues.</span>`;
   }
 
+  const daysUntil = (iso) => Math.ceil((startOfDay(iso) - startOfDay(Date.now())) / 86400000);
+  const upcomingFairs = () => fairs.filter((f) => new Date(f.end || f.start) >= startOfDay(Date.now()))
+    .sort((a, b) => a.start.localeCompare(b.start));
+
+  function renderKpis() {
+    const show = activeTab === "alle" && !search.value.trim() && !onlyNew.checked;
+    kpis.hidden = !show;
+    if (!show) return;
+    const now = Date.now(), week = now - 7 * 86400000;
+    const tenders = data.topics.find((t) => t.id === "ausschreibungen")?.items || [];
+    const open = tenders.filter((i) => i.deadline && new Date(i.deadline) > now);
+    const soon = open.filter((i) => new Date(i.deadline) - now <= 14 * 86400000);
+    const newTenders = tenders.filter((i) => i.published && new Date(i.published) > now - 30 * 86400000);
+    const all = data.topics.flatMap((t) => t.items);
+    const lastWeek = all.filter((i) => i.published && new Date(i.published) > week);
+    const papers = all.filter((i) => i.kind === "paper" && i.published && new Date(i.published) > now - 30 * 86400000);
+    const fair = upcomingFairs()[0];
+    const card = (tab, value, label, sub, color) => `<button type="button" class="kpi" data-kpi="${tab}" style="--tc:${color}">
+        <span class="kpi-value">${value}</span><span class="kpi-label">${label}</span>${sub ? `<span class="kpi-sub">${sub}</span>` : ""}</button>`;
+    kpis.innerHTML =
+      card("ausschreibungen", open.length, "offene Ausschreibungen",
+        soon.length ? `${soon.length} mit Frist in 14 Tagen` : "keine Frist in 14 Tagen", "var(--t-ausschreibungen)") +
+      card("ausschreibungen", newTenders.length, "neue Ausschreibungen", "letzte 30 Tage", "var(--t-ausschreibungen)") +
+      card("alle", lastWeek.length, "Meldungen", "letzte 7 Tage", "var(--new)") +
+      card("technologie", papers.length, "Fachartikel", "letzte 30 Tage", "var(--t-technologie)") +
+      (fair ? card("termine", daysUntil(fair.start) <= 0 ? "läuft" : `${daysUntil(fair.start)} T.`, escapeHtml(fair.name),
+        `${fmtDate(fair.start)} · ${escapeHtml(fair.city)}`, "var(--t-konkurrenz)") : "");
+  }
+
+  function fairList(limit) {
+    const list = upcomingFairs().slice(0, limit);
+    if (!list.length) return `<p class="empty">Keine Termine hinterlegt.</p>`;
+    const fmt = (iso) => new Date(iso).toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+    return `<ol class="fairs">${list.map((f) => {
+      const d = daysUntil(f.start);
+      const when = d <= 0 ? "läuft gerade" : d === 1 ? "morgen" : d < 60 ? `in ${d} Tagen` : `in ${Math.round(d / 30)} Monaten`;
+      return `<li>
+        <div class="fair-date"><b>${new Date(f.start).getDate()}</b><span>${new Date(f.start).toLocaleDateString("de-DE", { month: "short", year: "2-digit" })}</span></div>
+        <div class="item-main">
+          <a class="item-title" href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(f.name)}</a>
+          <div class="item-meta"><span>${flag(f.country)} ${escapeHtml(f.city)}</span><span>${fmt(f.start)}${f.end && f.end !== f.start ? `–${fmt(f.end)}` : ""}</span>${f.confidence === "unsure" ? `<span title="Datum noch nicht offiziell bestätigt">Datum vorläufig</span>` : ""}</div>
+          ${f.note ? `<p class="item-sum">${escapeHtml(f.note)}</p>` : ""}
+        </div>
+        <span class="due ${d <= 14 ? "soon" : ""}">${when}</span>
+      </li>`;
+    }).join("")}</ol>`;
+  }
+
   function renderBriefing() {
     const show = activeTab === "alle" && !search.value.trim() && !onlyNew.checked;
     briefing.hidden = !show;
@@ -170,8 +222,16 @@
       .sort((a, b) => a.deadline.localeCompare(b.deadline));
     const list = (open.length ? open : tenders).slice(0, 5);
 
+    // Das Wichtigste der Woche: nach KI-Relevanz, sonst nach Datum, ohne die Top-Meldungen oben
+    const leadLinks = new Set(leads.map((l) => l.item.link));
+    const week = Date.now() - 7 * 86400000;
+    const digest = data.topics.filter((t) => t.id !== "ausschreibungen")
+      .flatMap((t) => t.items.filter((i) => i.published && new Date(i.published) > week && !leadLinks.has(i.link)))
+      .sort((a, b) => ((b.ai?.score ?? 5) - (a.ai?.score ?? 5)) || b.published.localeCompare(a.published))
+      .slice(0, 8);
+
     briefing.innerHTML = `
-      <div>
+      <div class="main-col">
         <h2 class="section-title">Top-Meldungen</h2>
         <div class="leads">${leads.map(({ topic, item }) => `
           <a class="lead" href="${escapeHtml(item.link)}" target="_blank" rel="noopener" style="--tc:${meta(topic.id).color}">
@@ -183,23 +243,35 @@
             </div>
           </a>`).join("")}
         </div>
+        ${digest.length ? `<div class="tile digest">
+          <header class="tile-head"><span class="tile-icon">📌</span><h2>Das Wichtigste der Woche</h2><span class="count">aus allen Rubriken</span></header>
+          <ol class="items">${digest.map((it) => renderItem(it, "", true)).join("")}</ol>
+        </div>` : ""}
       </div>
-      <div class="deadlines">
-        <h2 class="section-title">🪖 ${open.length ? "Offene Ausschreibungen" : "Neueste Ausschreibungen"}</h2>
-        ${list.length ? `<ol>${list.map((it) => tenderRow(it)).join("")}</ol>`
-          : `<p class="empty">Gerade keine Ausschreibungen zu ballistischen Helmen.</p>`}
+      <div class="side">
+        <div class="deadlines">
+          <h2 class="section-title">🪖 ${open.length ? "Offene Ausschreibungen" : "Neueste Ausschreibungen"}</h2>
+          ${list.length ? `<ol>${list.map((it) => tenderRow(it)).join("")}</ol>`
+            : `<p class="empty">Gerade keine Ausschreibungen zu ballistischen Helmen.</p>`}
+        </div>
+        ${fairs.length ? `<div class="deadlines events">
+          <h2 class="section-title">📅 Nächste Messen</h2>
+          ${fairList(4)}
+          <button type="button" class="more" data-kpi="termine">Alle Termine</button>
+        </div>` : ""}
       </div>`;
   }
 
   // ------------------------------------------------------------ Kacheln
 
-  function renderItem(it, q) {
+  function renderItem(it, q, withTopic = false) {
     return `<li class="item">
       <div class="item-main">
         <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
         <div class="item-meta">
           ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
           ${hotBadge(it)}
+          ${withTopic ? `<span class="chip" style="--tc:${meta(it.topic).color}">${meta(it.topic).icon} ${escapeHtml(topicShort(it.topic))}</span>` : ""}
           ${it.kind === "paper" ? `<span class="paper">📄 Fachartikel</span>` : ""}
           <span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>
           ${it.published ? `<time datetime="${it.published}" title="${new Date(it.published).toLocaleString("de-DE")}">${relTime(it.published)}</time>` : ""}
@@ -270,6 +342,7 @@
         <span class="tile-icon">${meta(topic.id).icon}</span>
         <h2>${escapeHtml(topic.name)}</h2>
         <span class="count">${nOpen} offen${nSoon ? ` · <b class="warn">${nSoon} Frist ≤ 7 Tage</b>` : ""}</span>
+        <button type="button" class="export" data-export="1" title="Als CSV-Datei für Excel herunterladen">⬇ Excel</button>
       </header>
       <div class="country-chips">${chips}</div>
       ${rows.length ? `<div class="table-wrap"><table class="tenders">
@@ -277,6 +350,21 @@
         <tbody>${rows.map(row).join("")}</tbody></table></div>`
         : `<p class="empty">${topic.items.length ? "Keine Treffer." : "Gerade keine Ausschreibungen zu ballistischen Helmen."}</p>`}
     </section>`;
+  }
+
+  function exportTenders() {
+    const topic = data.topics.find((t) => t.id === "ausschreibungen");
+    const rows = filtered(topic).filter((i) => !tenderCountry || (i.country || "-") === tenderCountry);
+    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const day = (iso) => iso ? iso.slice(0, 10) : "";
+    const lines = [["Land", "Titel", "Titel (Deutsch)", "Auftraggeber", "Veröffentlicht", "Frist", "Menge/Details", "KI-Relevanz", "Quelle", "Link"],
+      ...rows.map((i) => [i.country, i.title, i.ai?.title_de, i.buyer, day(i.published), day(i.deadline), i.ai?.facts, i.ai?.score, i.source, i.link])];
+    const csv = "\ufeff" + lines.map((r) => r.map(cell).join(";")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `helm-radar-ausschreibungen-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
   function renderSaved(q) {
@@ -295,6 +383,16 @@
 
   function renderGrid() {
     const q = search.value.trim();
+    if (activeTab === "termine") {
+      grid.classList.add("single");
+      grid.innerHTML = `<section class="tile" style="--tc:var(--t-konkurrenz)">
+        <header class="tile-head"><span class="tile-icon">📅</span><h2>Messen und Termine</h2>
+          <span class="count">${upcomingFairs().length} Termine</span></header>
+        <div class="fair-wrap">${fairList(50)}</div>
+        <p class="empty small">Ein Klick auf den Namen öffnet die offizielle Messeseite. Termine bitte vor der Reiseplanung dort prüfen.</p>
+      </section>`;
+      return;
+    }
     if (activeTab === "gemerkt" || activeTab === "ausschreibungen") {
       grid.classList.add("single");
       const topic = data.topics.find((t) => t.id === "ausschreibungen");
@@ -339,7 +437,13 @@
       </tr>`).join("")}</tbody></table></div>`;
   }
 
-  function render() { renderTabs(); renderSince(); renderBriefing(); renderGrid(); }
+  function setTab(id) {
+    activeTab = id;
+    store.set(TAB_KEY, activeTab);
+    history.replaceState(null, "", id === "alle" ? location.pathname + location.search : `#${id}`);
+  }
+
+  function render() { renderTabs(); renderKpis(); renderSince(); renderBriefing(); renderGrid(); }
 
   function toggleSave(link) {
     if (saved[link]) delete saved[link];
@@ -357,8 +461,7 @@
   tabs.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-tab]");
     if (!b) return;
-    activeTab = b.dataset.tab;
-    store.set(TAB_KEY, activeTab);
+    setTab(b.dataset.tab);
     render();
     window.scrollTo({ top: 0 });
   });
@@ -367,9 +470,12 @@
     if (s) { e.preventDefault(); toggleSave(s.dataset.save); return; }
     const c = e.target.closest("button[data-country]");
     if (c) { tenderCountry = c.dataset.country; renderGrid(); return; }
+    if (e.target.closest("button[data-export]")) { exportTenders(); return; }
+    const k = e.target.closest("button[data-kpi]");
+    if (k) { setTab(k.dataset.kpi); render(); window.scrollTo({ top: 0 }); return; }
     const n = e.target.closest("button[data-since]");
     if (n) {
-      activeTab = n.dataset.since;
+      setTab(n.dataset.since);
       onlyNew.checked = true;
       render();
       window.scrollTo({ top: 0 });
@@ -378,17 +484,22 @@
     const b = e.target.closest("button[data-more]");
     if (b) { expanded.add(b.dataset.more); renderGrid(); }
   });
-  const refresh = () => { renderSince(); renderBriefing(); renderGrid(); };
+  const refresh = () => { renderKpis(); renderSince(); renderBriefing(); renderGrid(); };
+  addEventListener("hashchange", () => { activeTab = decodeURIComponent(location.hash.slice(1)) || "alle"; if (data) render(); });
   search.addEventListener("input", refresh);
   onlyNew.addEventListener("change", refresh);
   deutsch.checked = store.get(LANG_KEY) !== "0";
   deutsch.addEventListener("change", () => { store.set(LANG_KEY, deutsch.checked ? "1" : "0"); refresh(); });
 
-  fetch(`data/news.json?t=${Date.now()}`)
+  // Messetermine (gepflegte Liste im Repo); fehlt sie, bleibt der Bereich einfach leer
+  const fairsLoaded = fetch(`messen.json?t=${Date.now()}`).then((r) => r.ok ? r.json() : []).catch(() => [])
+    .then((f) => { fairs = Array.isArray(f) ? f : []; });
+
+  Promise.all([fetch(`data/news.json?t=${Date.now()}`), fairsLoaded]).then(([r]) => r)
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((json) => {
       data = json;
-      if (activeTab !== "gemerkt" && !data.topics.some((t) => t.id === activeTab)) activeTab = "alle";
+      if (!["gemerkt", "termine"].includes(activeTab) && !data.topics.some((t) => t.id === activeTab)) activeTab = "alle";
       for (const t of data.topics) for (const it of t.items) byLink.set(it.link, it);
       // Gemerkte Meldungen mit dem aktuellen Stand auffrischen (z. B. neue KI-Zusammenfassung)
       for (const link of Object.keys(saved)) if (byLink.has(link)) saved[link] = { ...byLink.get(link), savedAt: saved[link].savedAt };
