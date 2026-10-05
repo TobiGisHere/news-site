@@ -18,7 +18,10 @@
         "ballistic helmet",
         "bullet resistant helmet",
         "Schutzweste",
-        "Visier"
+        "Visier",
+        "ballistisch",
+        "kugelsicher",
+        "Schutzhelm"
       ],
       "cpv": {
         "18444110": "Helme (Code beim Bau gegen CPV-Liste prüfen)",

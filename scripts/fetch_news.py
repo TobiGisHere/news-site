@@ -37,7 +37,10 @@ MAX_ITEMS_PER_TOPIC = 80
 MAX_AGE_DAYS = {"ausschreibungen": 120, "konkurrenz": 120, "branche": 30}
 DEFAULT_MAX_AGE_DAYS = 14
 
-TED_CPV = ["35815100", "18444110", "18444100", "35113400"]
+# Kugelsichere Kleidung/Westen (35815…) und Schutzkopfbedeckungen/Helme (18444…).
+# 35113400 (Schutz- und Sicherheitskleidung) ist zu breit und liefert v. a. Arbeitskleidung.
+TED_CPV = ["35815000", "35815100", "18444000", "18444100", "18444110"]
+TED_CPV_PREFIXES = ("35815", "18444")
 TED_FULLTEXT = ['"ballistic helmet"', '"ballistischer Schutzhelm"', "Schutzhelm", "VPAM", '"bullet resistant"']
 
 
@@ -169,7 +172,7 @@ def discover_feed(page_url):
 
 # ---------------------------------------------------------------- APIs
 
-def fetch_ted(topic, source):
+def fetch_ted(topic, source, match=None):
     since = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS["ausschreibungen"])).strftime("%Y%m%d")
     cpv = " ".join(TED_CPV)
     queries = [
@@ -177,7 +180,7 @@ def fetch_ted(topic, source):
         f"classification-cpv IN ({cpv}) AND publication-date >= {since} SORT BY publication-date DESC",
     ]
     fields = ["publication-number", "notice-title", "buyer-name", "buyer-country",
-              "publication-date", "deadline-receipt-tender-date-lot", "notice-type"]
+              "publication-date", "deadline-receipt-tender-date-lot", "notice-type", "classification-cpv"]
     last_err = None
     for q in queries:
         try:
@@ -206,11 +209,17 @@ def fetch_ted(topic, source):
         pub_no = n.get("publication-number")
         if not pub_no:
             continue
+        title = pick_lang(n.get("notice-title"))
+        cpvs = n.get("classification-cpv") or []
+        cpvs = [str(c) for c in (cpvs if isinstance(cpvs, list) else [cpvs])]
+        # Volltext-Treffer nur behalten, wenn CPV passt oder der Titel einen Suchbegriff enthält
+        if not (any(c.startswith(TED_CPV_PREFIXES) for c in cpvs) or (match and match(title))):
+            continue
         deadline = to_iso(pick_lang(n.get("deadline-receipt-tender-date-lot")))
         country = pick_lang(n.get("buyer-country"))
         buyer = pick_lang(n.get("buyer-name"))
         it = make_item(
-            topic, source["name"], pick_lang(n.get("notice-title")) or f"TED {pub_no}",
+            topic, source["name"], title or f"TED {pub_no}",
             f"https://ted.europa.eu/de/notice/-/detail/{pub_no}",
             to_iso(pick_lang(n.get("publication-date"))),
             " · ".join(x for x in (buyer, country) if x),
@@ -226,7 +235,7 @@ def fetch_find_a_tender(topic, source, match):
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
     url = source["url"] + "?" + urllib.parse.urlencode({"updatedFrom": since, "stages": "tender", "limit": 100})
     data = json.loads(http_get(url, headers={"Accept": "application/json"}))
-    prefixes = tuple(c[:6] for c in TED_CPV)
+    prefixes = TED_CPV_PREFIXES
     items = []
     for rel in data.get("releases", []):
         tender = rel.get("tender") or {}
@@ -279,7 +288,7 @@ def run_job(job, matchers):
     try:
         if job["kind"] == "api":
             if "ted.europa.eu" in job["url"]:
-                items = fetch_ted(job["topic"], job["source"])
+                items = fetch_ted(job["topic"], job["source"], matchers.get(job["topic"]))
             elif "find-tender" in job["url"]:
                 items = fetch_find_a_tender(job["topic"], job["source"], matchers.get(job["topic"]))
             else:
@@ -351,7 +360,8 @@ def main():
             print(f"  ✗ {s['name']}: {s.get('error')}", file=sys.stderr)
     if os.environ.get("GITHUB_ACTIONS"):
         # Ergebnis als Anmerkung am Workflow-Lauf, damit es ohne Log-Download sichtbar ist
-        print(f"::notice title=Quellen::{ok}/{len(statuses)} Quellen ok")
+        counts = ", ".join(f"{t['short']}: {len(t['items'])}" for t in out["topics"])
+        print(f"::notice title=Quellen::{ok}/{len(statuses)} Quellen ok. Meldungen: {counts}")
         failed = [f"{s['name']}: {s.get('error')}" for s in statuses if not s["ok"]]
         if failed:
             print("::warning title=Nicht erreichbar::" + "%0A".join(failed))
