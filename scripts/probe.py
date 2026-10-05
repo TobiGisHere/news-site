@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Hilfsskript: lädt Seiten roh herunter, damit neue Quellen offline entwickelt werden können."""
-import json, sys, urllib.request, urllib.error, hashlib, re
+import json, sys, urllib.request, urllib.error, hashlib, re, http.cookiejar
+opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 from pathlib import Path
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -19,7 +20,7 @@ for line in Path(sys.argv[1]).read_text().splitlines():
                                           **({"Content-Type": "application/json"} if body else {})})
     entry = {"name": name, "url": url}
     try:
-        with urllib.request.urlopen(req, timeout=40) as r:
+        with opener.open(req, timeout=40) as r:
             data = r.read()
             entry.update(status=r.status, final_url=r.geturl(), ctype=r.headers.get("Content-Type"), size=len(data))
     except urllib.error.HTTPError as e:
