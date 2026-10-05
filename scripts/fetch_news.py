@@ -136,6 +136,31 @@ def make_item(topic, source, title, link, published=None, summary="", publisher=
 
 # ---------------------------------------------------------------- Feeds
 
+IMG_RE = re.compile(r"<img[^>]+src=[\"']([^\"']+)", re.I)
+
+
+def entry_image(e):
+    """Vorschaubild aus media:thumbnail, media:content, Enclosure oder erstem <img>."""
+    for key in ("media_thumbnail", "media_content"):
+        for m in e.get(key) or []:
+            url = m.get("url")
+            if url and (key == "media_thumbnail" or "image" in (m.get("type") or "image") or m.get("medium") == "image"):
+                return url
+    for enc in e.get("enclosures") or []:
+        if (enc.get("type") or "").startswith("image") and enc.get("href"):
+            return enc["href"]
+    for c in [e.get("summary", "")] + [x.get("value", "") for x in e.get("content") or []]:
+        m = IMG_RE.search(c or "")
+        if m and not m.group(1).startswith("data:"):
+            return html.unescape(m.group(1))
+    return None
+
+
+def domain_of(url):
+    host = urllib.parse.urlparse(url or "").hostname or ""
+    return host[4:] if host.startswith("www.") else host
+
+
 def parse_feed(raw, topic, source_name, is_gnews=False):
     feed = feedparser.parse(raw)
     if feed.bozo and not feed.entries:
@@ -144,14 +169,20 @@ def parse_feed(raw, topic, source_name, is_gnews=False):
     for e in feed.entries:
         title = e.get("title", "")
         publisher = None
+        domain = domain_of(e.get("link"))
         if is_gnews:
             src = e.get("source") or {}
             publisher = src.get("title") if isinstance(src, dict) else None
             if publisher and title.endswith(" - " + publisher):
                 title = title[: -len(publisher) - 3]
+            domain = domain_of(src.get("href")) if isinstance(src, dict) else ""
         summary = "" if is_gnews else (e.get("summary") or e.get("description") or "")
         published = to_iso(e.get("published_parsed") or e.get("updated_parsed")) or to_iso(e.get("published"))
-        it = make_item(topic, source_name, title, e.get("link"), published, summary, publisher)
+        img = None if is_gnews else entry_image(e)
+        if img and img.startswith("//"):
+            img = "https:" + img
+        it = make_item(topic, source_name, title, e.get("link"), published, summary, publisher,
+                       extra={"image": img if img and img.startswith("https://") else None, "domain": domain or None})
         if it:
             items.append(it)
     return items
@@ -253,7 +284,7 @@ def fetch_ted(topic, source, match=None):
             to_iso(pick_lang(n.get("publication-date"))),
             " · ".join(x for x in (buyer, country) if x),
             publisher="TED",
-            extra={"deadline": deadline, "buyer": buyer or None},
+            extra={"deadline": deadline, "buyer": buyer or None, "country": country or None, "domain": "ted.europa.eu"},
         )
         if it:
             items.append(it)
@@ -279,7 +310,8 @@ def fetch_find_a_tender(topic, source, match):
             f"https://www.find-tender.service.gov.uk/Notice/{notice_id}",
             to_iso(rel.get("date")), tender.get("description", ""),
             publisher="Find a Tender",
-            extra={"deadline": to_iso((tender.get("tenderPeriod") or {}).get("endDate"))},
+            extra={"deadline": to_iso((tender.get("tenderPeriod") or {}).get("endDate")), "country": "GBR",
+                   "domain": "find-tender.service.gov.uk"},
         )
         if it:
             items.append(it)
