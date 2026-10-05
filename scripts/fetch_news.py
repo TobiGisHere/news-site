@@ -12,7 +12,10 @@ Zusätzlich bekommt jede Quelle mit "gnews_query" einen eigenen Google-News-Feed
 
 import datetime as dt
 import hashlib
+import io
+import zipfile
 import html
+import http.cookiejar
 import json
 import os
 import re
@@ -32,6 +35,7 @@ SOURCES = ROOT / "sources.json"
 OUT = ROOT / "site" / "data" / "news.json"
 
 USER_AGENT = "Mozilla/5.0 (compatible; MeineNewsSite/1.0; +https://github.com)"
+BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 TIMEOUT = 25
 MAX_ITEMS_PER_TOPIC = 80
 MAX_AGE_DAYS = {"ausschreibungen": 365, "konkurrenz": 120, "branche": 30}
@@ -214,6 +218,211 @@ def discover_feed(page_url):
     return urllib.parse.urljoin(page_url, links[0]) if links else None
 
 
+# ---------------------------------------------------------------- Webseiten ohne Feed
+
+MONTHS = {m: i + 1 for i, names in enumerate([
+    ("jan", "januar", "january", "jän"), ("feb", "februar", "february"), ("mar", "mär", "märz", "march", "maerz"),
+    ("apr", "april"), ("may", "mai"), ("jun", "juni", "june"), ("jul", "juli", "july"), ("aug", "august"),
+    ("sep", "sept", "september"), ("oct", "okt", "oktober", "october"), ("nov", "november"), ("dec", "dez", "dezember", "december"),
+]) for m in names}
+DATE_PATTERNS = [
+    (re.compile(r'datetime="(\d{4}-\d{2}-\d{2})'), lambda m: m.group(1)),
+    (re.compile(r"\b(\d{1,2})\.\s?(\d{1,2})\.\s?(20\d{2})\b"), lambda m: f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"),
+    (re.compile(r"\b(20\d{2})-(\d{2})-(\d{2})\b"), lambda m: f"{m.group(1)}-{m.group(2)}-{m.group(3)}"),
+    (re.compile(r"\b([A-Za-zäÄ]{3,9})\.? (\d{1,2}),? (20\d{2})\b"),
+     lambda m: f"{m.group(3)}-{MONTHS[m.group(1).lower()]:02d}-{int(m.group(2)):02d}" if m.group(1).lower() in MONTHS else None),
+    (re.compile(r"\b(\d{1,2})\.? ([A-Za-zäÄ]{3,9})\.? (20\d{2})\b"),
+     lambda m: f"{m.group(3)}-{MONTHS[m.group(2).lower()]:02d}-{int(m.group(1)):02d}" if m.group(2).lower() in MONTHS else None),
+]
+
+
+def find_date(text, mdy=False):
+    if mdy:  # US-Format MM.DD.YYYY
+        text = re.sub(r"\b(\d{1,2})\.(\d{1,2})\.(20\d{2})\b", r"\2.\1.\3", text or "")
+    for rx, conv in DATE_PATTERNS:
+        for m in rx.finditer(text or ""):
+            try:
+                d = conv(m)
+                if d:
+                    dt.date.fromisoformat(d)
+                    return d
+            except (ValueError, KeyError):
+                continue
+    return None
+
+
+class AnchorParser(HTMLParser):
+    """Sammelt Links mit Text; Überschriften innerhalb eines Links werden als Titel bevorzugt."""
+    HEADINGS = {"h1", "h2", "h3", "h4", "h5"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.anchors, self.stack = [], []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            a = dict(attrs)
+            self.stack.append({"href": a.get("href"), "title": a.get("title") or a.get("aria-label") or "",
+                               "text": "", "heading": "", "in_h": False})
+        elif tag in self.HEADINGS and self.stack:
+            self.stack[-1]["in_h"] = True
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.stack:
+            self.anchors.append(self.stack.pop())
+        elif tag in self.HEADINGS and self.stack:
+            self.stack[-1]["in_h"] = False
+
+    def handle_data(self, data):
+        if self.stack:
+            cur = self.stack[-1]
+            cur["text"] += data + " "
+            if cur["in_h"]:
+                cur["heading"] += data + " "
+
+
+def scrape_page(job, previous_links):
+    cfg = job["source"]
+    page = cfg.get("list_url") or cfg["url"]
+    raw = http_get(page).decode("utf-8", "replace")
+    pattern = re.compile(cfg["link_pattern"])
+    strip = re.compile(cfg["title_strip"], re.I) if cfg.get("title_strip") else None
+    parser = AnchorParser()
+    parser.feed(raw)
+    hrefs_pos = sorted({raw.find(a["href"]) for a in parser.anchors
+                        if a["href"] and pattern.search(urllib.parse.urljoin(page, a["href"]))} - {-1})
+    mdy = cfg.get("date_order") == "mdy"
+    known_source = any(l.get("via") == job["name"] for l in previous_links.values())
+    now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    items, seen = [], set()
+    for a in parser.anchors:
+        if not a["href"]:
+            continue
+        url = urllib.parse.urljoin(page, a["href"]).split("#")[0]
+        if url in seen or not pattern.search(url):
+            continue
+        title = clean_text(a["heading"]) or clean_text(a["text"]) or clean_text(a["title"])
+        if strip:
+            title = clean_text(strip.sub(" ", title))
+        if len(title) < 20:
+            continue
+        seen.add(url)
+        # Datum im Linktext, sonst in der Umgebung des Links im HTML suchen
+        where = cfg.get("date_position", "auto")
+        published = find_date(a["text"], mdy) if where != "none" else None
+        if not published and where != "none":
+            # Nur im eigenen Abschnitt suchen: zwischen vorherigem und nächstem Artikel-Link
+            pos = raw.find(a["href"])
+            if pos >= 0:
+                nxt = min([p for p in hrefs_pos if p > pos] + [pos + 1200])
+                prv = max([p for p in hrefs_pos if p < pos] + [max(0, pos - 800)])
+                after = TAG_RE.sub(" ", raw[pos:min(nxt, pos + 1200)])
+                before = TAG_RE.sub(" ", raw[max(prv, pos - 800):pos])
+                if where == "before":
+                    published = find_date(before[-200:], mdy)
+                else:
+                    published = find_date(after, mdy) or find_date(before, mdy)
+        if published and published > (dt.date.today() + dt.timedelta(days=1)).isoformat():
+            published = None  # Datum in der Zukunft = vermutlich Veranstaltungstermin
+        published = to_iso(published) if published else None
+        if not published:
+            prev = previous_links.get(url)
+            # Neu aufgetauchte Links bekommen den Zeitpunkt des ersten Funds
+            published = prev.get("published") if prev else (now if known_source else None)
+        it = make_item(job["topic"], job["name"], title, url, published,
+                       extra={"domain": domain_of(url), "image": None})
+        if it:
+            items.append(it)
+        if len(items) >= cfg.get("max_items", 12):
+            break
+    if not items:
+        raise ValueError("keine Artikel-Links gefunden (Seitenaufbau geändert?)")
+    return items
+
+
+# ---------------------------------------------------------------- Bekanntmachungsservice (oeffentlichevergabe.de)
+
+OEV_EXPORT = "https://oeffentlichevergabe.de/api/notice-exports?pubDay={day}&format=ocds.zip"
+
+
+def fetch_oev(topic, source, days):
+    """Lädt die täglichen OCDS-Exporte aller deutschen Bekanntmachungen (u. a. DTVP, evergabe-online)."""
+    items, loaded = [], 0
+    for back in range(days):
+        day = (dt.date.today() - dt.timedelta(days=back)).isoformat()
+        try:
+            raw = http_get(OEV_EXPORT.format(day=day))
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 404):
+                continue
+            raise
+        if raw[:2] != b"PK":
+            continue
+        loaded += 1
+        with zipfile.ZipFile(io.BytesIO(raw)) as z:
+            for name in z.namelist():
+                try:
+                    rel = json.loads(z.read(name))["releases"][0]
+                except (KeyError, IndexError, ValueError):
+                    continue
+                if "tender" not in (rel.get("tag") or []):
+                    continue
+                t = rel.get("tender") or {}
+                cpvs = [((i.get("classification") or {}).get("id") or "") for i in t.get("items") or []]
+                lots = " ".join(f"{l.get('title', '')} {l.get('description', '')}" for l in t.get("lots") or [])
+                text = f"{t.get('description', '')} {lots}"
+                # Vorfilter, die endgültige Auswahl passiert über require_keywords des Themas
+                if not (any(c.startswith(TED_CPV_PREFIXES) for c in cpvs) or re.search(r"helm|kopfschutz", f"{t.get('title', '')} {text}", re.I)):
+                    continue
+                docs = [d.get("url") for d in t.get("documents") or [] if d.get("url")]
+                buyer = (rel.get("buyer") or {}).get("name")
+                link = docs[0] if docs else f"https://oeffentlichevergabe.de/ui/de/search/details?noticeId={rel.get('id')}"
+                it = make_item(topic, source["name"], t.get("title") or "Bekanntmachung", link,
+                               to_iso(rel.get("date")), text, publisher="Bekanntmachungsservice",
+                               extra={"buyer": buyer, "country": "DEU", "domain": domain_of(link)})
+                if it:
+                    items.append(it)
+    if not loaded:
+        raise ValueError("keine Tagesexporte verfügbar")
+    return items
+
+
+# ---------------------------------------------------------------- simap.ch (Schweiz)
+
+SIMAP_API = "https://www.simap.ch/api/publications/v2/project/project-search?lang=de&search={q}"
+SIMAP_TYPES = {"tender": "Ausschreibung", "award": "Zuschlag", "direct_award": "Freihändiger Zuschlag",
+               "advance_notice": "Vorankündigung", "request_for_information": "Marktabklärung",
+               "abandonment": "Abbruch"}
+
+
+def fetch_simap(topic, source):
+    # simap verlangt ein Session-Cookie, deshalb eigener Opener mit Cookie-Speicher
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    headers = {"User-Agent": BROWSER_UA, "Accept": "application/json"}
+    opener.open(urllib.request.Request("https://www.simap.ch/de", headers=headers), timeout=TIMEOUT).read()
+
+    def pick(v):
+        return (v or {}).get("de") or (v or {}).get("fr") or (v or {}).get("en") or (v or {}).get("it") or "" if isinstance(v, dict) else (v or "")
+
+    items, seen = [], set()
+    for q in source.get("queries", ["Helm"]):
+        raw = opener.open(urllib.request.Request(SIMAP_API.format(q=urllib.parse.quote(q)), headers=headers), timeout=TIMEOUT).read()
+        for p in json.loads(raw).get("projects", []):
+            if p["id"] in seen:
+                continue
+            seen.add(p["id"])
+            lots = " · ".join(pick(l.get("lotTitle")) for l in p.get("lots") or [] if pick(l.get("lotTitle")))
+            kind = SIMAP_TYPES.get(p.get("pubType"), p.get("pubType") or "")
+            it = make_item(topic, source["name"], pick(p.get("title")),
+                           f"https://www.simap.ch/de/project-detail/{p['id']}",
+                           to_iso(p.get("publicationDate")), " · ".join(x for x in (kind, lots) if x),
+                           publisher="simap.ch",
+                           extra={"buyer": pick(p.get("procOfficeName")) or None, "country": "CHE", "domain": "simap.ch"})
+            if it:
+                items.append(it)
+    return items
+
+
 # ---------------------------------------------------------------- APIs
 
 def fetch_ted(topic, source, match=None):
@@ -335,7 +544,7 @@ def build_jobs(cfg):
             elif stype == "api":
                 jobs.append({"topic": tid, "name": s["name"], "kind": "api", "url": s["url"], "source": s})
             elif stype == "scrape" and s.get("url"):
-                jobs.append({"topic": tid, "name": s["name"], "kind": "scrape", "url": s["url"], "filter": s.get("filter")})
+                jobs.append({"topic": tid, "name": s["name"], "kind": "scrape", "url": s["url"], "filter": s.get("filter"), "source": s})
             # Zusätzlicher Google-News-Feed (z. B. für jeden Wettbewerber)
             if s.get("gnews_query") and stype != "gnews":
                 jobs.append({"topic": tid, "name": f"{s['name']} (Google News)", "kind": "gnews",
@@ -343,7 +552,7 @@ def build_jobs(cfg):
     return jobs
 
 
-def run_job(job, matchers):
+def run_job(job, matchers, previous_links):
     match = matchers.get(job["topic"]) if job.get("filter") == "keywords" else None
     status = {"name": job["name"], "topic": job["topic"], "kind": job["kind"], "url": job["url"], "ok": False, "count": 0}
     try:
@@ -352,8 +561,14 @@ def run_job(job, matchers):
                 items = fetch_ted(job["topic"], job["source"], matchers.get(job["topic"]))
             elif "find-tender" in job["url"]:
                 items = fetch_find_a_tender(job["topic"], job["source"], matchers.get(job["topic"]))
+            elif "simap.ch" in job["url"]:
+                items = fetch_simap(job["topic"], job["source"])
+            elif "oeffentlichevergabe" in job["url"]:
+                items = fetch_oev(job["topic"], job["source"], 3 if previous_links else 21)
             else:
                 raise ValueError("API nicht unterstützt")
+        elif job["kind"] == "scrape" and job["source"].get("link_pattern"):
+            items = scrape_page(job, previous_links)
         elif job["kind"] == "scrape":
             feed_url = discover_feed(job["url"])
             if not feed_url:
@@ -404,14 +619,36 @@ def finalize(cfg, all_items):
     return topics_out
 
 
+def load_previous():
+    """Vorherige news.json von der Live-Seite: Meldungen bleiben erhalten, auch wenn eine Quelle sie nicht mehr liefert."""
+    url = os.environ.get("PREVIOUS_URL")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not url and "/" in repo:
+        owner, name = repo.split("/", 1)
+        url = f"https://{owner.lower()}.github.io/{name}/data/news.json"
+    if not url:
+        return []
+    try:
+        data = json.loads(http_get(f"{url}?t={int(time.time())}"))
+        return [i for t in data.get("topics", []) for i in t.get("items", [])]
+    except Exception as e:  # noqa: BLE001
+        print(f"Vorherige Daten nicht geladen: {e}", file=sys.stderr)
+        return []
+
+
 def main():
     cfg = json.loads(SOURCES.read_text(encoding="utf-8"))
+    topic_ids = {t["id"] for t in cfg["topics"]}
+    previous = [i for i in load_previous() if i.get("topic") in topic_ids]
+    previous_links = {i["link"]: i for i in previous}
     matchers = {t["id"]: keyword_matcher(t.get("keywords")) for t in cfg["topics"]}
     jobs = build_jobs(cfg)
     with ThreadPoolExecutor(max_workers=12) as pool:
-        results = list(pool.map(lambda j: run_job(j, matchers), jobs))
+        results = list(pool.map(lambda j: run_job(j, matchers, previous_links), jobs))
     statuses = [r[0] for r in results]
     items = [i for r in results for i in r[1]]
+    # Neue Meldungen zuerst, damit sie beim Entdoppeln Vorrang vor alten Ständen haben
+    items += previous
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "topics": finalize(cfg, items),

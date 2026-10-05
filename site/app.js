@@ -6,7 +6,6 @@
     ausschreibungen: { icon: "🪖", color: "var(--t-ausschreibungen)" },
     konkurrenz: { icon: "🏢", color: "var(--t-konkurrenz)" },
     branche: { icon: "🛡️", color: "var(--t-branche)" },
-    ki: { icon: "🤖", color: "var(--t-ki)" },
     weltpolitik: { icon: "🌍", color: "var(--t-weltpolitik)" },
   };
   const meta = (id) => TOPIC_META[id] || { icon: "📰", color: "var(--accent)" };
