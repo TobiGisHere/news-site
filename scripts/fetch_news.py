@@ -643,8 +643,25 @@ def main():
     previous_links = {i["link"]: i for i in previous}
     matchers = {t["id"]: keyword_matcher(t.get("keywords")) for t in cfg["topics"]}
     jobs = build_jobs(cfg)
+    # Google News drosselt bei vielen parallelen Abrufen (HTTP 503), deshalb nacheinander mit Pause
+    gnews_jobs = [j for j in jobs if j["kind"] == "gnews"]
+    other_jobs = [j for j in jobs if j["kind"] != "gnews"]
+
+    def run_gnews_serial():
+        out = []
+        for j in gnews_jobs:
+            res = run_job(j, matchers, previous_links)
+            if not res[0]["ok"] and "503" in res[0].get("error", ""):
+                time.sleep(20)
+                res = run_job(j, matchers, previous_links)
+            out.append(res)
+            time.sleep(2)
+        return out
+
     with ThreadPoolExecutor(max_workers=12) as pool:
-        results = list(pool.map(lambda j: run_job(j, matchers, previous_links), jobs))
+        gnews_future = pool.submit(run_gnews_serial)
+        results = list(pool.map(lambda j: run_job(j, matchers, previous_links), other_jobs))
+        results += gnews_future.result()
     statuses = [r[0] for r in results]
     items = [i for r in results for i in r[1]]
     # Neue Meldungen zuerst, damit sie beim Entdoppeln Vorrang vor alten Ständen haben
