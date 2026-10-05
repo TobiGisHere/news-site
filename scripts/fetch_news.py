@@ -682,6 +682,9 @@ def main():
         # Ergebnis als Anmerkung am Workflow-Lauf, damit es ohne Log-Download sichtbar ist
         counts = ", ".join(f"{t['short']}: {len(t['items'])}" for t in out["topics"])
         print(f"::notice title=Quellen::{ok}/{len(statuses)} Quellen ok. Meldungen: {counts}")
+        for t in out["topics"]:
+            sample = "%0A".join(i["title"][:90].replace("%", "%25") for i in t["items"][:10])
+            print(f"::notice title=Beispiele {t['short']}::{sample}")
         failed = [f"{s['name']}: {s.get('error')}" for s in statuses if not s["ok"]]
         if failed:
             print("::warning title=Nicht erreichbar::" + "%0A".join(failed))
