@@ -34,7 +34,7 @@ OUT = ROOT / "site" / "data" / "news.json"
 USER_AGENT = "Mozilla/5.0 (compatible; MeineNewsSite/1.0; +https://github.com)"
 TIMEOUT = 25
 MAX_ITEMS_PER_TOPIC = 80
-MAX_AGE_DAYS = {"ausschreibungen": 120, "konkurrenz": 120, "branche": 30}
+MAX_AGE_DAYS = {"ausschreibungen": 365, "konkurrenz": 120, "branche": 30}
 DEFAULT_MAX_AGE_DAYS = 14
 
 # Nur Schutzkopfbedeckungen/Helme (18444…), keine Westen oder Schutzkleidung.
@@ -195,7 +195,7 @@ def fetch_ted(topic, source, match=None):
     fields = ["publication-number", "notice-title", "buyer-name", "buyer-country",
               "publication-date", "deadline-receipt-tender-date-lot", "notice-type", "classification-cpv"]
     last_err = None
-    for q in queries:
+    for qi, q in enumerate(queries):
         try:
             data = http_post_json(source["url"], {
                 "query": q, "fields": fields, "limit": 250, "page": 1,
@@ -218,6 +218,8 @@ def fetch_ted(topic, source, match=None):
         return str(v or "")
 
     items = []
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::notice title=TED::Abfrage {qi + 1}, {len(data.get('notices', []))} Treffer, gesamt {data.get('totalNoticeCount')}")
     for n in data.get("notices", []):
         pub_no = n.get("publication-number")
         if not pub_no:
