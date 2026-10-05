@@ -198,7 +198,7 @@ def fetch_ted(topic, source, match=None):
     for q in queries:
         try:
             data = http_post_json(source["url"], {
-                "query": q, "fields": fields, "limit": 100, "page": 1,
+                "query": q, "fields": fields, "limit": 250, "page": 1,
                 "scope": "ALL", "paginationMode": "PAGE_NUMBER",
             })
             break
@@ -332,10 +332,12 @@ def finalize(cfg, all_items):
         tid = topic["id"]
         max_age = dt.timedelta(days=MAX_AGE_DAYS.get(tid, DEFAULT_MAX_AGE_DAYS))
         require = require_matcher(topic.get("require_keywords"), topic.get("exclude_keywords"))
+        require_also = require_matcher(topic.get("require_also_keywords"))
         seen_links, seen_titles, items = set(), set(), []
         for it in sorted((i for i in all_items if i["topic"] == tid),
                          key=lambda i: i["published"] or "", reverse=True):
-            if require and not require(f"{it['title']} {it['summary']}"):
+            text = f"{it['title']} {it['summary']}"
+            if (require and not require(text)) or (require_also and not require_also(text)):
                 continue
             norm = re.sub(r"\W+", "", it["title"].lower())[:90]
             if it["link"] in seen_links or norm in seen_titles:
