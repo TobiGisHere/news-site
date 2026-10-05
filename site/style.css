@@ -271,3 +271,5 @@ table.tenders { width: 100%; border-collapse: collapse; }
   #search { flex-basis: 100%; max-width: none; }
 }
 .main-col > .section-title { margin-bottom: -6px; }
+.meta.stale { color: var(--warn); }
+.meta.stale::after { content: " · Aktualisierung hängt"; }

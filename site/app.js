@@ -505,6 +505,9 @@
       for (const link of Object.keys(saved)) if (byLink.has(link)) saved[link] = { ...byLink.get(link), savedAt: saved[link].savedAt };
       const gen = new Date(data.generated);
       $("#updated").textContent = `Aktualisiert ${relTime(data.generated)} (${gen.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })})`;
+      // Hinweis, falls die automatische Aktualisierung länger ausgesetzt hat (nachts normal)
+      const hoursOld = (Date.now() - gen) / 3600000, hour = new Date().getHours();
+      if (hoursOld > 6 && hour >= 9) $("#updated").classList.add("stale");
       if (!lastVisit) onlyNew.parentElement.hidden = true;
       render();
       renderSources();
