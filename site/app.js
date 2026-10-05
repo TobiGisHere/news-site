@@ -6,6 +6,7 @@
     ausschreibungen: { icon: "🪖", color: "var(--t-ausschreibungen)" },
     konkurrenz: { icon: "🏢", color: "var(--t-konkurrenz)" },
     branche: { icon: "🛡️", color: "var(--t-branche)" },
+    technologie: { icon: "🔬", color: "var(--t-technologie)" },
     weltpolitik: { icon: "🌍", color: "var(--t-weltpolitik)" },
   };
   const meta = (id) => TOPIC_META[id] || { icon: "📰", color: "var(--accent)" };
@@ -159,6 +160,7 @@
         <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(it.title, q)}</a>
         <div class="item-meta">
           ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
+          ${it.kind === "paper" ? `<span class="paper">📄 Fachartikel</span>` : ""}
           <span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>
           ${it.published ? `<time datetime="${it.published}" title="${new Date(it.published).toLocaleString("de-DE")}">${relTime(it.published)}</time>` : ""}
         </div>

@@ -1,8 +1,9 @@
-simap_home https://www.simap.ch/de
-simap_home2 https://www.simap.ch/de
-simap_api1 https://www.simap.ch/api/publications/v2/project/project-search?lang=de&search=Helm
-simap_api2 https://www.simap.ch/api/publications/v1/project/project-search?search=Helm
-simap_api3 https://www.simap.ch/api/publications/v2/project/project-search?search=Helm&cpvCodes=18444000
-bund_rss1 https://www.service.bund.de/Content/DE/Ausschreibungen/Suche/Formular.html?nn=4641482&resultsPerPage=100&sortOrder=dateOfIssue_dt+desc&jobsrss=true&templateQueryString=Helm
-bund_rss2 https://www.service.bund.de/Content/DE/Ausschreibungen/Suche/Formular.html?nn=4641482&resultsPerPage=100&sortOrder=dateOfIssue_dt+desc&jobsrss=true&searchtext=Helm
-bund_rss3 https://www.service.bund.de/Content/DE/Service/RSS/rss_node.html?type=0
+ft1 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ (\"ballistic helmet\") AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft2 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ \"ballistic helmet\" AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft3 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ (ballistic helmet) AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft4 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ (ballistic AND helmet) AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft5 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ (VPAM) AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft6 POST https://api.ted.europa.eu/v3/notices/search {"query": "notice-title ~ (ballistic) AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft7 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ (ballistisch* AND helm*) AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft8 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ (\"he\u0142m balistyczny\" OR \"casque balistique\" OR \"\u03b2\u03b1\u03bb\u03bb\u03b9\u03c3\u03c4\u03b9\u03ba\u03cc \u03ba\u03c1\u03ac\u03bd\u03bf\u03c2\") AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}
+ft9 POST https://api.ted.europa.eu/v3/notices/search {"query": "FT ~ (balistic*) AND classification-cpv IN (18444000 18444100 18444110 18444111 18444112) AND publication-date >= 20250101", "fields": ["publication-number", "notice-title", "publication-date"], "limit": 20, "page": 1, "scope": "ALL", "paginationMode": "PAGE_NUMBER"}

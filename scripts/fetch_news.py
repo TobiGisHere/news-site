@@ -38,7 +38,7 @@ USER_AGENT = "Mozilla/5.0 (compatible; MeineNewsSite/1.0; +https://github.com)"
 BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 TIMEOUT = 25
 MAX_ITEMS_PER_TOPIC = 80
-MAX_AGE_DAYS = {"ausschreibungen": 365, "konkurrenz": 120, "branche": 30}
+MAX_AGE_DAYS = {"ausschreibungen": 365, "konkurrenz": 120, "branche": 30, "technologie": 365}
 DEFAULT_MAX_AGE_DAYS = 14
 
 # Nur Schutzkopfbedeckungen/Helme (18444…), keine Westen oder Schutzkleidung.
@@ -423,6 +423,36 @@ def fetch_simap(topic, source):
     return items
 
 
+# ---------------------------------------------------------------- Fachliteratur (OpenAlex)
+
+OPENALEX = "https://api.openalex.org/works?search={q}&filter=from_publication_date:{since}&sort=publication_date:desc&per-page=40&mailto=news-site@example.com"
+
+
+def fetch_openalex(topic, source):
+    since = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS.get(topic, 365))).isoformat()
+    items, seen = [], set()
+    for q in source.get("queries", []):
+        data = json.loads(http_get(OPENALEX.format(q=urllib.parse.quote(q), since=since)))
+        for w in data.get("results", []):
+            if w["id"] in seen or not w.get("title"):
+                continue
+            seen.add(w["id"])
+            # Abstract liegt als invertierter Index vor
+            inv = w.get("abstract_inverted_index") or {}
+            words = sorted(((pos, word) for word, poss in inv.items() for pos in poss))
+            abstract = " ".join(word for _, word in words)
+            venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name")
+            authors = [a["author"]["display_name"] for a in (w.get("authorships") or [])[:3] if a.get("author")]
+            meta = " · ".join(x for x in (venue, ", ".join(authors) + (" u. a." if len(w.get("authorships") or []) > 3 else "")) if x)
+            link = w.get("doi") or (w.get("primary_location") or {}).get("landing_page_url") or w["id"]
+            it = make_item(topic, source["name"], w["title"], link, to_iso(w.get("publication_date")),
+                           f"{meta}. {abstract}" if abstract else meta, publisher=venue or "Fachartikel",
+                           extra={"domain": domain_of(link), "kind": "paper"})
+            if it:
+                items.append(it)
+    return items
+
+
 # ---------------------------------------------------------------- APIs
 
 TED_BALLISTIC_FT = [
@@ -583,6 +613,8 @@ def run_job(job, matchers, previous_links):
                 items = fetch_ted(job["topic"], job["source"], matchers.get(job["topic"]))
             elif "find-tender" in job["url"]:
                 items = fetch_find_a_tender(job["topic"], job["source"], matchers.get(job["topic"]))
+            elif "openalex.org" in job["url"]:
+                items = fetch_openalex(job["topic"], job["source"])
             elif "simap.ch" in job["url"]:
                 items = fetch_simap(job["topic"], job["source"])
             elif "oeffentlichevergabe" in job["url"]:
@@ -685,7 +717,7 @@ def main():
         for j in gnews_jobs:
             res = run_job(j, matchers, previous_links)
             if not res[0]["ok"] and "503" in res[0].get("error", ""):
-                time.sleep(20)
+                time.sleep(8)
                 res = run_job(j, matchers, previous_links)
             out.append(res)
             time.sleep(2)

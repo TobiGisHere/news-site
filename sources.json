@@ -282,7 +282,30 @@
           "verified": false
         }
       ],
-      "short": "Wettbewerber"
+      "short": "Wettbewerber",
+      "require_keywords": [
+        "helm",
+        "kopfschutz",
+        "head protection",
+        "head-borne",
+        "headborne",
+        "mandible",
+        "visier",
+        "visor",
+        "casque",
+        "casco",
+        "kask",
+        "hełm",
+        "přilb",
+        "kaciga"
+      ],
+      "exclude_keywords": [
+        "wilhelm",
+        "helmut",
+        "helmstedt",
+        "overwhelm",
+        "helmholtz"
+      ]
     },
     {
       "id": "branche",
@@ -359,7 +382,130 @@
           "verified": false
         }
       ],
-      "short": "Branche"
+      "short": "Branche",
+      "require_keywords": [
+        "helm",
+        "kopfschutz",
+        "head protection",
+        "head-borne",
+        "headborne",
+        "mandible",
+        "visier",
+        "visor",
+        "casque",
+        "casco",
+        "kask",
+        "hełm",
+        "přilb",
+        "kaciga",
+        "ballist",
+        "body armor",
+        "body armour",
+        "schutzausrüstung",
+        "schutzweste",
+        "plate carrier",
+        "VPAM",
+        "beschusshemm",
+        "kugelsicher",
+        "bulletproof",
+        "bullet-proof",
+        "armor",
+        "armour"
+      ],
+      "exclude_keywords": [
+        "wilhelm",
+        "helmut",
+        "helmstedt",
+        "overwhelm",
+        "helmholtz",
+        "ballistic missile",
+        "ballistische rakete",
+        "ballistischen rakete"
+      ]
+    },
+    {
+      "id": "technologie",
+      "name": "Technologieradar Ballistik & Helme",
+      "short": "Technologie",
+      "priority": 2,
+      "note": "Neuheiten aus Helmtechnik und ballistischem Schutz sowie aktuelle Fachpublikationen.",
+      "require_keywords": [
+        "helm",
+        "kopfschutz",
+        "head protection",
+        "head-borne",
+        "headborne",
+        "mandible",
+        "visier",
+        "visor",
+        "casque",
+        "casco",
+        "kask",
+        "hełm",
+        "přilb",
+        "kaciga",
+        "ballist",
+        "armor",
+        "armour",
+        "blunt trauma",
+        "UHMWPE",
+        "aramid",
+        "traumatic brain",
+        "TBI",
+        "blast"
+      ],
+      "exclude_keywords": [
+        "wilhelm",
+        "helmut",
+        "helmstedt",
+        "overwhelm",
+        "helmholtz",
+        "ballistic missile",
+        "ballistische rakete",
+        "ballistischen rakete"
+      ],
+      "sources": [
+        {
+          "name": "Fachpublikationen (OpenAlex)",
+          "type": "api",
+          "url": "https://api.openalex.org/works",
+          "verified": false,
+          "queries": [
+            "ballistic helmet",
+            "combat helmet",
+            "helmet behind armor blunt trauma",
+            "helmet blast traumatic brain injury",
+            "UHMWPE helmet",
+            "aramid helmet impact",
+            "bullet resistant helmet",
+            "helmet ballistic impact simulation"
+          ]
+        },
+        {
+          "name": "arXiv: Helm und Ballistik",
+          "type": "rss",
+          "url": "https://export.arxiv.org/api/query?search_query=abs:helmet%20AND%20(abs:ballistic%20OR%20abs:blast%20OR%20abs:impact)&sortBy=submittedDate&sortOrder=descending&max_results=30",
+          "verified": false
+        },
+        {
+          "name": "Google News: Helmtechnologie",
+          "type": "gnews",
+          "query": "(\"ballistic helmet\" OR \"combat helmet\") (technology OR material OR innovation OR prototype OR UHMWPE)",
+          "verified": false
+        },
+        {
+          "name": "Google News: Helmtechnik DE",
+          "type": "gnews",
+          "query": "(ballistischer Helm OR Gefechtshelm OR Schutzhelm) (Technologie OR Material OR Innovation OR Entwicklung)",
+          "verified": false
+        },
+        {
+          "name": "Google News: Helm-Forschung",
+          "type": "gnews",
+          "query": "helmet (\"traumatic brain injury\" OR \"blunt trauma\" OR \"blast\") research soldiers OR police",
+          "verified": false
+        }
+      ]
     },
     {
       "id": "weltpolitik",

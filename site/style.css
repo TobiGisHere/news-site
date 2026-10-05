@@ -14,6 +14,7 @@
   --t-ausschreibungen: #c2410c;
   --t-konkurrenz: #7c3aed;
   --t-branche: #0f766e;
+  --t-technologie: #2563eb;
   --t-weltpolitik: #475569;
 }
 @media (prefers-color-scheme: dark) {
@@ -31,6 +32,7 @@
     --t-ausschreibungen: #fb923c;
     --t-konkurrenz: #a78bfa;
     --t-branche: #2dd4bf;
+    --t-technologie: #60a5fa;
     --t-weltpolitik: #94a3b8;
   }
 }
@@ -156,3 +158,4 @@ mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: in
   .lead { flex: 0 0 76%; scroll-snap-align: start; }
   .lead-img { aspect-ratio: 2 / 1; }
 }
+.paper { font-weight: 600; color: var(--t-technologie); }
