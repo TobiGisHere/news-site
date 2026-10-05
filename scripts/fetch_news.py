@@ -455,17 +455,13 @@ def fetch_openalex(topic, source):
 
 # ---------------------------------------------------------------- APIs
 
-# TED-Volltextsuche (Platzhalter * erlaubt). Mehrere einfache Abfragen statt einer großen,
-# weil sehr lange ODER-Ketten keine Treffer liefern.
-HELMET_WORDS = ("helm* OR helmet* OR casque* OR casco* OR caschi OR capacete* OR kask* OR hełm* OR přilb* OR prilb* "
-                "OR kacig* OR čelad* OR sisak* OR kypär* OR hjälm* OR hjelm* OR kiiver* OR šalm* OR ķiver*")
-TED_BALLISTIC_FT = [
-    f"ballist* AND ({HELMET_WORDS})",
-    f"balist* AND ({HELMET_WORDS})",
-    f"VPAM AND ({HELMET_WORDS})",
-    f"(kuloodporn* OR pare-balles OR antibala* OR kogelwerend* OR neprůstřel* OR beschusshemm*) AND ({HELMET_WORDS})",
-    '"combat helmet" OR "combat helmets" OR Gefechtshelm* OR Kampfhelm*',
-]
+# TED-Volltextsuche: Die API akzeptiert nur einfache "A AND B"-Ausdrücke mit Platzhaltern,
+# verschachtelte ODER-Gruppen führen zu HTTP 400. Deshalb je Begriffspaar eine Abfrage.
+TED_BALLISTIC_FT = (
+    [f"ballist* AND {h}" for h in ("helm*", "helmet*", "casque*", "casco*", "kask*")]
+    + [f"balist* AND {h}" for h in ("casco*", "kask*", "kacig*", "prilb*", "capacete*", "casca")]
+    + ["VPAM AND helm*", "VPAM AND helmet*", "kuloodporn* AND kask*", "kogelwerend* AND helm*"]
+)
 
 
 def fetch_ted(topic, source, match=None):
