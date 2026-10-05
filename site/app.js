@@ -3,6 +3,7 @@
   const LAST_VISIT_KEY = "news:lastVisit";
   const TAB_KEY = "news:tab";
   const SAVED_KEY = "news:saved";
+  const LANG_KEY = "news:deutsch";
   const HOT = 8;             // ab dieser KI-Relevanz gilt eine Meldung als wichtig
   const TOPIC_META = {
     ausschreibungen: { icon: "🪖", color: "var(--t-ausschreibungen)" },
@@ -29,7 +30,7 @@
   };
 
   const $ = (sel) => document.querySelector(sel);
-  const grid = $("#grid"), tabs = $("#tabs"), search = $("#search"), onlyNew = $("#only-new"), briefing = $("#briefing"), since = $("#since");
+  const grid = $("#grid"), tabs = $("#tabs"), search = $("#search"), onlyNew = $("#only-new"), deutsch = $("#deutsch"), briefing = $("#briefing"), since = $("#since");
   const lastVisit = store.get(LAST_VISIT_KEY);
   let data = null;
   let activeTab = store.get(TAB_KEY) || "alle";
@@ -90,11 +91,13 @@
     const q = search.value.trim().toLowerCase();
     return items.filter((it) =>
       (!onlyNew.checked || isNew(it)) &&
-      (!q || `${it.title} ${it.summary} ${it.ai?.summary || ""} ${it.source} ${it.buyer || ""}`.toLowerCase().includes(q)));
+      (!q || `${it.title} ${it.ai?.title_de || ""} ${it.summary} ${it.ai?.summary || ""} ${it.source} ${it.buyer || ""}`.toLowerCase().includes(q)));
   }
   const filtered = (topic) => filterItems(topic.items);
 
-  const summaryOf = (it) => it.ai?.summary || it.summary;
+  const german = () => deutsch.checked;
+  const titleOf = (it) => (german() && it.ai?.title_de) || it.title;
+  const summaryOf = (it) => (german() && it.ai?.summary) || it.summary;
   const hotBadge = (it) => it.ai?.score >= HOT
     ? `<span class="hot" title="KI-Relevanz ${it.ai.score}/10${it.ai.why ? `: ${escapeHtml(it.ai.why)}` : ""}">🔥 wichtig</span>` : "";
   function starBtn(it) {
@@ -122,7 +125,7 @@
     return `<li class="tender ${due?.expired ? "expired" : ""}">
       <span class="flag" title="${escapeHtml(it.country || "")}">${flag(it.country)}</span>
       <div class="item-main">
-        <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(it.title, q)}</a>
+        <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
         <div class="item-meta">
           ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
           ${hotBadge(it)}
@@ -175,7 +178,7 @@
             ${item.image ? img(item.image, "lead-img") : `<div class="lead-img">${meta(topic.id).icon}</div>`}
             <div class="lead-body">
               <span class="chip">${meta(topic.id).icon} ${escapeHtml(topic.short || topic.name)}</span>
-              <span class="item-title">${escapeHtml(item.title)}</span>
+              <span class="item-title">${escapeHtml(titleOf(item))}</span>
               <span class="item-meta"><span class="src">${favicon(item.domain)}${escapeHtml(item.source)}</span>${item.published ? `<span>${relTime(item.published)}</span>` : ""}</span>
             </div>
           </a>`).join("")}
@@ -193,7 +196,7 @@
   function renderItem(it, q) {
     return `<li class="item">
       <div class="item-main">
-        <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(it.title, q)}</a>
+        <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
         <div class="item-meta">
           ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
           ${hotBadge(it)}
@@ -202,7 +205,7 @@
           ${it.published ? `<time datetime="${it.published}" title="${new Date(it.published).toLocaleString("de-DE")}">${relTime(it.published)}</time>` : ""}
           ${starBtn(it)}
         </div>
-        ${summaryOf(it) ? `<p class="item-sum${it.ai?.summary ? " ai" : ""}">${highlight(summaryOf(it), q)}</p>` : ""}
+        ${summaryOf(it) ? `<p class="item-sum${german() && it.ai?.summary ? " ai" : ""}">${highlight(summaryOf(it), q)}</p>` : ""}
       </div>
       ${img(it.image, "thumb")}
     </li>`;
@@ -246,7 +249,7 @@
       return `<tr class="${due?.expired ? "expired" : ""}">
         <td class="t-flag" title="${escapeHtml(it.country || "")}">${it.country ? flag(it.country) : "🌐"}<small>${escapeHtml(it.country || "")}</small></td>
         <td class="t-main">
-          <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(it.title, q)}</a>
+          <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
           <div class="item-meta">
             ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
             ${hotBadge(it)}
@@ -254,7 +257,7 @@
             ${starBtn(it)}
           </div>
           ${it.ai?.facts ? `<p class="facts">${escapeHtml(it.ai.facts)}</p>` : ""}
-          ${it.ai?.summary ? `<p class="item-sum ai">${highlight(it.ai.summary, q)}</p>` : ""}
+          ${german() && it.ai?.summary ? `<p class="item-sum ai">${highlight(it.ai.summary, q)}</p>` : ""}
         </td>
         <td class="t-pub">${it.published ? `<span class="t-label">Veröffentlicht </span>${fmtDate(it.published)}` : "–"}</td>
         <td class="t-due">${due ? `<span class="due ${due.cls}" title="${escapeHtml(due.title || "")}">${due.text}</span>
@@ -378,6 +381,8 @@
   const refresh = () => { renderSince(); renderBriefing(); renderGrid(); };
   search.addEventListener("input", refresh);
   onlyNew.addEventListener("change", refresh);
+  deutsch.checked = store.get(LANG_KEY) !== "0";
+  deutsch.addEventListener("change", () => { store.set(LANG_KEY, deutsch.checked ? "1" : "0"); refresh(); });
 
   fetch(`data/news.json?t=${Date.now()}`)
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })

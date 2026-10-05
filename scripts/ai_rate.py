@@ -34,7 +34,7 @@ Behind-Armor Blunt Trauma, Blast/Schädel-Hirn-Trauma durch Beschuss, Helmprüfu
 - weltpolitik: Hoch = Geopolitik mit Folgen für Verteidigungsbeschaffung, Nachfrage nach Schutzausrüstung, Rüstungsbudgets, \
 Lieferketten/Logistik, Exportregeln; niedrig = Innenpolitik und Allgemeines.
 
-Für jede Meldung: score (ganze Zahl), summary (1-2 sachliche Sätze auf Deutsch, was drinsteht und warum es zählt; \
+Für jede Meldung: score (ganze Zahl), title_de (Titel auf Deutsch übersetzt; ist er schon deutsch, unverändert übernehmen; Eigennamen, Produktnamen und Normen nicht übersetzen), summary (1-2 sachliche Sätze auf Deutsch, was drinsteht und warum es zählt; \
 keine Floskeln, nichts erfinden), why (max. 8 Wörter Begründung), facts (nur bei Ausschreibungen: Menge, Wert oder Helmtyp, \
 falls genannt, sonst leer)."""
 
@@ -51,11 +51,12 @@ TOOL = {
                     "properties": {
                         "id": {"type": "integer"},
                         "score": {"type": "integer", "minimum": 0, "maximum": 10},
+                        "title_de": {"type": "string"},
                         "summary": {"type": "string"},
                         "why": {"type": "string"},
                         "facts": {"type": "string"},
                     },
-                    "required": ["id", "score", "summary", "why"],
+                    "required": ["id", "score", "title_de", "summary", "why"],
                 },
             }
         },
@@ -90,6 +91,7 @@ def _call(batch, key):
         if isinstance(i, int) and 0 <= i < len(batch):
             out[batch[i]["link"]] = {
                 "score": max(0, min(10, int(res.get("score", 0)))),
+                "title_de": (res.get("title_de") or "").strip()[:300] or None,
                 "summary": (res.get("summary") or "").strip()[:400],
                 "why": (res.get("why") or "").strip()[:80],
                 "facts": (res.get("facts") or "").strip()[:120] or None,
@@ -107,7 +109,11 @@ def rate(topics, cache):
             if it["link"] in cache:
                 it["ai"] = cache[it["link"]]
         return cache, "kein API-Schlüssel"
-    todo = [it for it in all_items if it["link"] not in cache][:MAX_NEW_PER_RUN]
+    def needs(it):
+        c = cache.get(it["link"])
+        # Ältere Bewertungen ohne Übersetzung nachholen; ausgeblendete (nur Score) nicht
+        return c is None or ("summary" in c and "title_de" not in c)
+    todo = [it for it in all_items if needs(it)][:MAX_NEW_PER_RUN]
     batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
     errors = []
 
