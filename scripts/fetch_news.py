@@ -30,6 +30,8 @@ from pathlib import Path
 
 import feedparser
 
+import ai_rate
+
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "sources.json"
 OUT = ROOT / "site" / "data" / "news.json"
@@ -643,7 +645,7 @@ def run_job(job, matchers, previous_links):
         return status, []
 
 
-def finalize(cfg, all_items):
+def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
     now = dt.datetime.now(dt.timezone.utc)
     topics_out = []
     for topic in sorted(cfg["topics"], key=lambda t: t.get("priority", 9)):
@@ -681,7 +683,7 @@ def finalize(cfg, all_items):
             lines = "%0A".join(f"{(d['published'] or '')[:10]} {d['title'][:110]}".replace("%", "%25") for d in recent[:40])
             print(f"::notice title=Aussortiert {topic.get('short', tid)} ({len(recent)} letzte 180 Tage)::{lines}")
         topics_out.append({"id": tid, "name": topic["name"], "short": topic.get("short", topic["name"]), "priority": topic.get("priority"),
-                           "items": items[:MAX_ITEMS_PER_TOPIC]})
+                           "items": items[:limit]})
     return topics_out
 
 
@@ -693,19 +695,21 @@ def load_previous():
         owner, name = repo.split("/", 1)
         url = f"https://{owner.lower()}.github.io/{name}/data/news.json"
     if not url:
-        return []
+        return {}
     try:
-        data = json.loads(http_get(f"{url}?t={int(time.time())}"))
-        return [i for t in data.get("topics", []) for i in t.get("items", [])]
+        return json.loads(http_get(f"{url}?t={int(time.time())}"))
     except Exception as e:  # noqa: BLE001
         print(f"Vorherige Daten nicht geladen: {e}", file=sys.stderr)
-        return []
+        return {}
 
 
 def main():
     cfg = json.loads(SOURCES.read_text(encoding="utf-8"))
     topic_ids = {t["id"] for t in cfg["topics"]}
-    previous = [i for i in load_previous() if i.get("topic") in topic_ids]
+    prev_data = load_previous()
+    previous = [i for t in prev_data.get("topics", []) for i in t.get("items", []) if i.get("topic") in topic_ids]
+    ai_cache = dict(prev_data.get("ai_cache") or {})
+    ai_cache.update({i["link"]: i["ai"] for i in previous if i.get("ai")})
     previous_links = {i["link"]: i for i in previous}
     matchers = {t["id"]: keyword_matcher(t.get("keywords")) for t in cfg["topics"]}
     jobs = build_jobs(cfg)
@@ -732,11 +736,20 @@ def main():
     items = [i for r in results for i in r[1]]
     # Neue Meldungen zuerst, damit sie beim Entdoppeln Vorrang vor alten Ständen haben
     items += previous
+    # Mehr Kandidaten behalten, weil die KI-Bewertung noch irrelevante Meldungen aussortiert
+    topics = finalize(cfg, items, limit=MAX_ITEMS_PER_TOPIC * 2)
+    ai_cache, ai_msg = ai_rate.rate(topics, ai_cache)
+    for t in topics:
+        t["items"] = t["items"][:MAX_ITEMS_PER_TOPIC]
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "topics": finalize(cfg, items),
+        "topics": topics,
         "sources": statuses,
+        # Nur ausgeblendete Bewertungen merken; sichtbare Meldungen tragen ihre Bewertung selbst
+        "ai_cache": {k: {"score": v["score"], "why": v.get("why")} for k, v in ai_cache.items()
+                     if k not in {i["link"] for t in topics for i in t["items"]}},
     }
+    print(f"KI-Bewertung: {ai_msg}")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     ok = sum(s["ok"] for s in statuses)
@@ -746,6 +759,7 @@ def main():
             print(f"  ✗ {s['name']}: {s.get('error')}", file=sys.stderr)
     if os.environ.get("GITHUB_ACTIONS"):
         # Ergebnis als Anmerkung am Workflow-Lauf, damit es ohne Log-Download sichtbar ist
+        print(f"::notice title=KI-Bewertung::{ai_msg}")
         counts = ", ".join(f"{t['short']}: {len(t['items'])}" for t in out["topics"])
         print(f"::notice title=Quellen::{ok}/{len(statuses)} Quellen ok. Meldungen: {counts}")
         for t in out["topics"]:

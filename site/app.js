@@ -2,6 +2,8 @@
   const PAGE = 8;            // Meldungen pro Kachel vor "Mehr anzeigen"
   const LAST_VISIT_KEY = "news:lastVisit";
   const TAB_KEY = "news:tab";
+  const SAVED_KEY = "news:saved";
+  const HOT = 8;             // ab dieser KI-Relevanz gilt eine Meldung als wichtig
   const TOPIC_META = {
     ausschreibungen: { icon: "🪖", color: "var(--t-ausschreibungen)" },
     konkurrenz: { icon: "🏢", color: "var(--t-konkurrenz)" },
@@ -27,11 +29,15 @@
   };
 
   const $ = (sel) => document.querySelector(sel);
-  const grid = $("#grid"), tabs = $("#tabs"), search = $("#search"), onlyNew = $("#only-new"), briefing = $("#briefing");
+  const grid = $("#grid"), tabs = $("#tabs"), search = $("#search"), onlyNew = $("#only-new"), briefing = $("#briefing"), since = $("#since");
   const lastVisit = store.get(LAST_VISIT_KEY);
   let data = null;
   let activeTab = store.get(TAB_KEY) || "alle";
   const expanded = new Set();
+  let tenderCountry = "";
+  let saved = {};
+  try { saved = JSON.parse(store.get(SAVED_KEY) || "{}") || {}; } catch { saved = {}; }
+  const byLink = new Map();
 
   const rtf = new Intl.RelativeTimeFormat("de", { numeric: "auto" });
   function relTime(iso) {
@@ -80,21 +86,33 @@
     ? `<div class="${cls}"><img src="${escapeHtml(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.remove()"></div>`
     : "";
 
-  function filtered(topic) {
+  function filterItems(items) {
     const q = search.value.trim().toLowerCase();
-    return topic.items.filter((it) =>
+    return items.filter((it) =>
       (!onlyNew.checked || isNew(it)) &&
-      (!q || `${it.title} ${it.summary} ${it.source} ${it.buyer || ""}`.toLowerCase().includes(q)));
+      (!q || `${it.title} ${it.summary} ${it.ai?.summary || ""} ${it.source} ${it.buyer || ""}`.toLowerCase().includes(q)));
+  }
+  const filtered = (topic) => filterItems(topic.items);
+
+  const summaryOf = (it) => it.ai?.summary || it.summary;
+  const hotBadge = (it) => it.ai?.score >= HOT
+    ? `<span class="hot" title="KI-Relevanz ${it.ai.score}/10${it.ai.why ? `: ${escapeHtml(it.ai.why)}` : ""}">🔥 wichtig</span>` : "";
+  function starBtn(it) {
+    const on = !!saved[it.link];
+    return `<button type="button" class="star${on ? " on" : ""}" data-save="${escapeHtml(it.link)}" aria-pressed="${on}" title="${on ? "Von der Merkliste nehmen" : "Merken"}">${on ? "★" : "☆"}</button>`;
   }
 
   // ------------------------------------------------------------ Reiter
 
   function renderTabs() {
     const btn = (id, label, badge, color) =>
-      `<button type="button" data-tab="${id}" aria-pressed="${activeTab === id}" style="--tc:${color}">${label}${badge ? `<span class="badge">${badge} neu</span>` : ""}</button>`;
+      `<button type="button" data-tab="${id}" aria-pressed="${activeTab === id}" style="--tc:${color}">${label}${badge ? `<span class="badge">${badge}</span>` : ""}</button>`;
+    const newBadge = (n) => n ? `${n} neu` : "";
     const totalNew = data.topics.reduce((n, t) => n + t.items.filter(isNew).length, 0);
-    tabs.innerHTML = btn("alle", "Überblick", totalNew, "var(--text)") +
-      data.topics.map((t) => btn(t.id, `${meta(t.id).icon} ${escapeHtml(t.short || t.name)}`, t.items.filter(isNew).length, meta(t.id).color)).join("");
+    const nSaved = Object.keys(saved).length;
+    tabs.innerHTML = btn("alle", "Überblick", newBadge(totalNew), "var(--text)") +
+      data.topics.map((t) => btn(t.id, `${meta(t.id).icon} ${escapeHtml(t.short || t.name)}`, newBadge(t.items.filter(isNew).length), meta(t.id).color)).join("") +
+      btn("gemerkt", "⭐ Merkliste", nSaved ? String(nSaved) : "", "var(--star)");
   }
 
   // ------------------------------------------------------------ Briefing
@@ -107,12 +125,27 @@
         <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(it.title, q)}</a>
         <div class="item-meta">
           ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
+          ${hotBadge(it)}
           ${it.buyer ? `<span>${highlight(it.buyer, q)}</span>` : `<span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>`}
           ${it.published ? `<span>veröffentlicht ${relTime(it.published)}</span>` : ""}
+          ${starBtn(it)}
         </div>
+        ${it.ai?.facts ? `<p class="facts">${escapeHtml(it.ai.facts)}</p>` : ""}
       </div>
       ${due ? `<span class="due ${due.cls}" title="${escapeHtml(due.title || "")}">${due.text}</span>` : ""}
     </li>`;
+  }
+
+  function renderSince() {
+    const show = lastVisit && activeTab === "alle" && !search.value.trim() && !onlyNew.checked;
+    since.hidden = !show;
+    if (!show) return;
+    const parts = data.topics.map((t) => ({ t, n: t.items.filter(isNew).length })).filter((p) => p.n);
+    const when = relTime(lastVisit);
+    since.innerHTML = parts.length
+      ? `<span class="since-label">Neu seit deinem letzten Besuch (${when}):</span>${parts.map(({ t, n }) =>
+          `<button type="button" data-since="${t.id}" style="--tc:${meta(t.id).color}"><b>${n}</b> ${meta(t.id).icon} ${escapeHtml(t.short || t.name)}</button>`).join("")}`
+      : `<span class="since-label">Seit deinem letzten Besuch (${when}) gibt es nichts Neues.</span>`;
   }
 
   function renderBriefing() {
@@ -123,7 +156,10 @@
     const twoDays = Date.now() - 2 * 86400000;
     const leads = data.topics.filter((t) => t.id !== "ausschreibungen").map((t) => {
       const recent = t.items.filter((i) => i.published && new Date(i.published) > twoDays);
-      return { topic: t, item: recent.find((i) => i.image) || recent[0] || t.items[0] };
+      const pool = recent.length ? recent : t.items;
+      const top = Math.max(-1, ...pool.map((i) => i.ai?.score ?? -1));
+      const best = pool.filter((i) => (i.ai?.score ?? -1) === top);
+      return { topic: t, item: best.find((i) => i.image) || best[0] };
     }).filter((l) => l.item);
 
     const tenders = data.topics.find((t) => t.id === "ausschreibungen")?.items || [];
@@ -160,11 +196,13 @@
         <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(it.title, q)}</a>
         <div class="item-meta">
           ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
+          ${hotBadge(it)}
           ${it.kind === "paper" ? `<span class="paper">📄 Fachartikel</span>` : ""}
           <span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>
           ${it.published ? `<time datetime="${it.published}" title="${new Date(it.published).toLocaleString("de-DE")}">${relTime(it.published)}</time>` : ""}
+          ${starBtn(it)}
         </div>
-        ${it.summary ? `<p class="item-sum">${highlight(it.summary, q)}</p>` : ""}
+        ${summaryOf(it) ? `<p class="item-sum${it.ai?.summary ? " ai" : ""}">${highlight(summaryOf(it), q)}</p>` : ""}
       </div>
       ${img(it.image, "thumb")}
     </li>`;
@@ -184,8 +222,82 @@
     return html + (open ? "</ol>" : "");
   }
 
+  function renderTenderTable(topic, q) {
+    const now = Date.now();
+    const all = filtered(topic);
+    const isOpen = (i) => !!i.deadline && new Date(i.deadline) > now;
+    const countries = {};
+    const cc = (i) => i.country || "-";
+    for (const i of all) countries[cc(i)] = (countries[cc(i)] || 0) + 1;
+    if (tenderCountry && !countries[tenderCountry]) tenderCountry = "";
+    const rows = all.filter((i) => !tenderCountry || cc(i) === tenderCountry)
+      .sort((a, b) => (isOpen(b) - isOpen(a)) ||
+        (isOpen(a) ? a.deadline.localeCompare(b.deadline) : (b.published || "").localeCompare(a.published || "")));
+    const nOpen = all.filter(isOpen).length;
+    const nSoon = all.filter((i) => isOpen(i) && new Date(i.deadline) - now <= 7 * 86400000).length;
+    const chip = (c, label, n) => `<button type="button" data-country="${escapeHtml(c)}" aria-pressed="${tenderCountry === c}">${label} <b>${n}</b></button>`;
+    const chips = chip("", "Alle Länder", all.length) + Object.entries(countries).sort((a, b) => b[1] - a[1])
+      .map(([c, n]) => chip(c, c !== "-" ? `${flag(c)} ${escapeHtml(c)}` : "🌐 ohne Land", n)).join("");
+
+    const row = (it) => {
+      const due = dueInfo(it.deadline);
+      const days = it.deadline ? (new Date(it.deadline) - now) / 86400000 : null;
+      const pct = days == null || days < 0 ? 0 : Math.max(4, Math.min(100, (days / 60) * 100));
+      return `<tr class="${due?.expired ? "expired" : ""}">
+        <td class="t-flag" title="${escapeHtml(it.country || "")}">${it.country ? flag(it.country) : "🌐"}<small>${escapeHtml(it.country || "")}</small></td>
+        <td class="t-main">
+          <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(it.title, q)}</a>
+          <div class="item-meta">
+            ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
+            ${hotBadge(it)}
+            ${it.buyer ? `<span>${highlight(it.buyer, q)}</span>` : `<span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>`}
+            ${starBtn(it)}
+          </div>
+          ${it.ai?.facts ? `<p class="facts">${escapeHtml(it.ai.facts)}</p>` : ""}
+          ${it.ai?.summary ? `<p class="item-sum ai">${highlight(it.ai.summary, q)}</p>` : ""}
+        </td>
+        <td class="t-pub">${it.published ? `<span class="t-label">Veröffentlicht </span>${fmtDate(it.published)}` : "–"}</td>
+        <td class="t-due">${due ? `<span class="due ${due.cls}" title="${escapeHtml(due.title || "")}">${due.text}</span>
+          ${pct ? `<div class="due-bar ${due.cls}"><span style="width:${pct}%"></span></div>` : ""}
+          ${due.expired ? "" : `<small>${fmtDate(it.deadline)}</small>`}` : `<span class="t-none">keine Frist bekannt</span>`}</td>
+      </tr>`;
+    };
+    return `<section class="tile tender-view" style="--tc:${meta(topic.id).color}">
+      <header class="tile-head">
+        <span class="tile-icon">${meta(topic.id).icon}</span>
+        <h2>${escapeHtml(topic.name)}</h2>
+        <span class="count">${nOpen} offen${nSoon ? ` · <b class="warn">${nSoon} Frist ≤ 7 Tage</b>` : ""}</span>
+      </header>
+      <div class="country-chips">${chips}</div>
+      ${rows.length ? `<div class="table-wrap"><table class="tenders">
+        <thead><tr><th>Land</th><th>Ausschreibung</th><th>Veröffentlicht</th><th>Frist</th></tr></thead>
+        <tbody>${rows.map(row).join("")}</tbody></table></div>`
+        : `<p class="empty">${topic.items.length ? "Keine Treffer." : "Gerade keine Ausschreibungen zu ballistischen Helmen."}</p>`}
+    </section>`;
+  }
+
+  function renderSaved(q) {
+    const items = filterItems(Object.values(saved)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+    return `<section class="tile" style="--tc:var(--star)">
+      <header class="tile-head">
+        <span class="tile-icon">⭐</span>
+        <h2>Merkliste</h2>
+        <span class="count">${items.length} gemerkt</span>
+      </header>
+      ${items.length ? `<ol class="items">${items.map((it) => it.topic === "ausschreibungen"
+          ? tenderRow(it, q).replace('class="tender', 'class="item tender') : renderItem(it, q)).join("")}</ol>`
+        : `<p class="empty">Noch nichts gemerkt. Tippe bei einer Meldung auf ☆, dann bleibt sie hier, auch wenn sie von der Seite verschwindet.</p>`}
+    </section>`;
+  }
+
   function renderGrid() {
     const q = search.value.trim();
+    if (activeTab === "gemerkt" || activeTab === "ausschreibungen") {
+      grid.classList.add("single");
+      const topic = data.topics.find((t) => t.id === "ausschreibungen");
+      grid.innerHTML = activeTab === "gemerkt" ? renderSaved(q) : renderTenderTable(topic, q);
+      return;
+    }
     const topics = activeTab === "alle" ? data.topics : data.topics.filter((t) => t.id === activeTab);
     grid.classList.toggle("single", activeTab !== "alle");
     grid.innerHTML = topics.map((topic) => {
@@ -224,7 +336,20 @@
       </tr>`).join("")}</tbody></table></div>`;
   }
 
-  function render() { renderTabs(); renderBriefing(); renderGrid(); }
+  function render() { renderTabs(); renderSince(); renderBriefing(); renderGrid(); }
+
+  function toggleSave(link) {
+    if (saved[link]) delete saved[link];
+    else {
+      const it = byLink.get(link);
+      if (!it) return;
+      saved[link] = { ...it, savedAt: Date.now() };
+    }
+    store.set(SAVED_KEY, JSON.stringify(saved));
+    renderTabs();
+    if (activeTab === "gemerkt") { renderGrid(); return; }
+    document.querySelectorAll(`button[data-save="${CSS.escape(link)}"]`).forEach((b) => { b.outerHTML = starBtn({ link }); });
+  }
 
   tabs.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-tab]");
@@ -234,23 +359,36 @@
     render();
     window.scrollTo({ top: 0 });
   });
-  grid.addEventListener("click", (e) => {
+  document.addEventListener("click", (e) => {
+    const s = e.target.closest("button[data-save]");
+    if (s) { e.preventDefault(); toggleSave(s.dataset.save); return; }
+    const c = e.target.closest("button[data-country]");
+    if (c) { tenderCountry = c.dataset.country; renderGrid(); return; }
+    const n = e.target.closest("button[data-since]");
+    if (n) {
+      activeTab = n.dataset.since;
+      onlyNew.checked = true;
+      render();
+      window.scrollTo({ top: 0 });
+      return;
+    }
     const b = e.target.closest("button[data-more]");
-    if (!b) return;
-    expanded.add(b.dataset.more);
-    renderGrid();
+    if (b) { expanded.add(b.dataset.more); renderGrid(); }
   });
-  search.addEventListener("input", () => { renderBriefing(); renderGrid(); });
-  onlyNew.addEventListener("change", () => { renderBriefing(); renderGrid(); });
+  const refresh = () => { renderSince(); renderBriefing(); renderGrid(); };
+  search.addEventListener("input", refresh);
+  onlyNew.addEventListener("change", refresh);
 
   fetch(`data/news.json?t=${Date.now()}`)
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((json) => {
       data = json;
-      if (!data.topics.some((t) => t.id === activeTab)) activeTab = "alle";
+      if (activeTab !== "gemerkt" && !data.topics.some((t) => t.id === activeTab)) activeTab = "alle";
+      for (const t of data.topics) for (const it of t.items) byLink.set(it.link, it);
+      // Gemerkte Meldungen mit dem aktuellen Stand auffrischen (z. B. neue KI-Zusammenfassung)
+      for (const link of Object.keys(saved)) if (byLink.has(link)) saved[link] = { ...byLink.get(link), savedAt: saved[link].savedAt };
       const gen = new Date(data.generated);
-      $("#updated").textContent = `Aktualisiert ${relTime(data.generated)} (${gen.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })})` +
-        (lastVisit ? " · neu = seit deinem letzten Besuch" : "");
+      $("#updated").textContent = `Aktualisiert ${relTime(data.generated)} (${gen.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })})`;
       if (!lastVisit) onlyNew.parentElement.hidden = true;
       render();
       renderSources();
