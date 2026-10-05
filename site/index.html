@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Meine News</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div>
+        <h1>Meine News</h1>
+        <p class="meta" id="updated">Lade Meldungen …</p>
+      </div>
+      <div class="controls">
+        <input id="search" type="search" placeholder="Suchen (z. B. VPAM, Helm, AI Act)" autocomplete="off">
+        <label class="toggle"><input type="checkbox" id="only-new"> nur neue</label>
+      </div>
+    </div>
+    <nav class="wrap tabs" id="tabs"></nav>
+  </header>
+
+  <main class="wrap">
+    <div class="grid" id="grid"></div>
+    <details class="sources" id="sources">
+      <summary>Quellen-Status</summary>
+      <div id="sources-body"></div>
+    </details>
+  </main>
+
+  <template id="tile-tpl">
+    <section class="tile">
+      <header class="tile-head">
+        <h2></h2>
+        <span class="count"></span>
+      </header>
+      <ol class="items"></ol>
+      <button class="more" type="button">Mehr anzeigen</button>
+    </section>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

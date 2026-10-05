@@ -1,0 +1,439 @@
+{
+  "version": 1,
+  "updated": "2026-10-05",
+  "notes": "verified=true: Feed am 2026-10-05 abgerufen und gültig. verified=false: URL nach bestem Wissen, beim Website-Bau prüfen. type: rss | api | scrape | gnews (Google-News-Suchfeed).",
+  "gnews_template": "https://news.google.com/rss/search?q={query}&hl=de&gl=DE&ceid=DE:de",
+  "topics": [
+    {
+      "id": "ausschreibungen",
+      "name": "Ausschreibungen ballistischer Schutz",
+      "priority": 1,
+      "keywords": [
+        "VPAM",
+        "HVN 2009",
+        "ballistischer Schutzhelm",
+        "Schutzhelm Polizei",
+        "Gefechtshelm",
+        "Titanhelm",
+        "ballistic helmet",
+        "bullet resistant helmet",
+        "Schutzweste",
+        "Visier"
+      ],
+      "cpv": {
+        "18444110": "Helme (Code beim Bau gegen CPV-Liste prüfen)",
+        "18444100": "Schutzkopfbedeckungen (prüfen)",
+        "35113400": "Schutz- und Sicherheitskleidung (prüfen)",
+        "35815100": "Kugelsichere Westen"
+      },
+      "sources": [
+        {
+          "name": "service.bund.de Ausschreibungen (alle)",
+          "type": "rss",
+          "url": "https://www.service.bund.de/Content/Globals/Functions/RSSFeed/RSSGenerator_Ausschreibungen.xml",
+          "verified": true,
+          "filter": "keywords",
+          "note": "Sehr breit, nur mit Keyword-Filter nutzen. Besser: Suche nach 'Helm' auf service.bund.de, dann Link 'Suchergebnis als RSS-Feed'."
+        },
+        {
+          "name": "service.bund.de Vergebene Aufträge",
+          "type": "rss",
+          "url": "https://www.service.bund.de/Content/Globals/Functions/RSSFeed/RSSGenerator_Vergebene_Auftraege.xml",
+          "verified": true,
+          "filter": "keywords",
+          "note": "Zeigt, wer Zuschläge bekommen hat."
+        },
+        {
+          "name": "TED (EU-weit) Search API",
+          "type": "api",
+          "url": "https://api.ted.europa.eu/v3/notices/search",
+          "method": "POST",
+          "verified": false,
+          "note": "Ohne API-Key. Expert-Query nach CPV-Codes und Volltext (Helm, helmet, VPAM). Doku: https://docs.ted.europa.eu/api/latest/search.html"
+        },
+        {
+          "name": "evergabe-online.de (Bund, u. a. BeschA, BAAINBw)",
+          "type": "scrape",
+          "url": "https://www.evergabe-online.de/search.html",
+          "verified": false
+        },
+        {
+          "name": "DTVP Deutsches Vergabeportal (viele Länderpolizeien)",
+          "type": "scrape",
+          "url": "https://www.dtvp.de/Center/common/project/search.do",
+          "verified": false
+        },
+        {
+          "name": "simap.ch (Schweiz)",
+          "type": "scrape",
+          "url": "https://www.simap.ch",
+          "verified": false
+        },
+        {
+          "name": "Find a Tender (UK)",
+          "type": "api",
+          "url": "https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages",
+          "verified": false,
+          "note": "OCDS-API, nach CPV filtern"
+        },
+        {
+          "name": "NSPA Business Opportunities (NATO)",
+          "type": "scrape",
+          "url": "https://www.nspa.nato.int/business/procurement/open-business-opportunities",
+          "verified": false
+        },
+        {
+          "name": "Google News: Ausschreibung Schutzhelm",
+          "type": "gnews",
+          "query": "Ausschreibung (Schutzhelm OR \"ballistischer Helm\" OR VPAM)",
+          "verified": false
+        },
+        {
+          "name": "Google News: ballistic helmet tender",
+          "type": "gnews",
+          "query": "\"ballistic helmet\" (tender OR contract OR procurement)",
+          "verified": false
+        }
+      ],
+      "short": "Ausschreibungen"
+    },
+    {
+      "id": "konkurrenz",
+      "name": "Wettbewerber ballistische Helme",
+      "priority": 1,
+      "note": "Standardliste, von Tobi zu bestätigen/ergänzen. Für jeden Wettbewerber zusätzlich ein Google-News-Feed auf den Firmennamen.",
+      "sources": [
+        {
+          "name": "Ulbrichts Protection",
+          "type": "scrape",
+          "url": "https://www.ulbrichts.com/protection/medien/",
+          "verified": true,
+          "gnews_query": "\"Ulbrichts Protection\""
+        },
+        {
+          "name": "Busch PROtective",
+          "type": "scrape",
+          "url": "https://busch-protective.com",
+          "verified": false,
+          "gnews_query": "\"Busch PROtective\""
+        },
+        {
+          "name": "Mehler Protection / Mehler Systems",
+          "type": "scrape",
+          "url": "https://mehler-systems.com/company-news/",
+          "verified": true,
+          "gnews_query": "\"Mehler Protection\" OR \"Mehler Systems\""
+        },
+        {
+          "name": "Schuberth",
+          "type": "gnews",
+          "gnews_query": "Schuberth Helm Polizei OR Militär",
+          "verified": false
+        },
+        {
+          "name": "Galvion (ehem. Revision)",
+          "type": "scrape",
+          "url": "https://galvion.com/news/",
+          "verified": false,
+          "gnews_query": "Galvion helmet"
+        },
+        {
+          "name": "Gentex / Ops-Core",
+          "type": "scrape",
+          "url": "https://www.gentexcorp.com/news",
+          "verified": false,
+          "gnews_query": "Gentex OR \"Ops-Core\" helmet"
+        },
+        {
+          "name": "Team Wendy",
+          "type": "scrape",
+          "url": "https://www.teamwendy.com/news",
+          "verified": false,
+          "gnews_query": "\"Team Wendy\""
+        },
+        {
+          "name": "Protection Group Danmark",
+          "type": "scrape",
+          "url": "https://protectiongroupdenmark.com",
+          "verified": false,
+          "gnews_query": "\"Protection Group Danmark\""
+        },
+        {
+          "name": "MKU",
+          "type": "gnews",
+          "gnews_query": "MKU helmet OR armour",
+          "verified": false
+        },
+        {
+          "name": "NP Aerospace",
+          "type": "gnews",
+          "gnews_query": "\"NP Aerospace\"",
+          "verified": false
+        },
+        {
+          "name": "ArmorSource",
+          "type": "gnews",
+          "gnews_query": "ArmorSource helmet",
+          "verified": false
+        },
+        {
+          "name": "FY-Composites",
+          "type": "gnews",
+          "gnews_query": "\"FY-Composites\" OR \"FY Composites\"",
+          "verified": false
+        },
+        {
+          "name": "Šestan-Busch",
+          "type": "gnews",
+          "gnews_query": "\"Sestan-Busch\"",
+          "verified": false
+        }
+      ],
+      "short": "Wettbewerber"
+    },
+    {
+      "id": "branche",
+      "name": "Branche, Berichte & Behörden",
+      "priority": 2,
+      "sources": [
+        {
+          "name": "hartpunkt (Defence & Sicherheitspolitik)",
+          "type": "rss",
+          "url": "https://www.hartpunkt.de/feed/",
+          "verified": true
+        },
+        {
+          "name": "Soldier Systems Daily",
+          "type": "rss",
+          "url": "https://soldiersystems.net/feed/",
+          "verified": true
+        },
+        {
+          "name": "Body Armor News",
+          "type": "rss",
+          "url": "https://www.bodyarmornews.com/feed/",
+          "verified": false
+        },
+        {
+          "name": "Behörden Spiegel",
+          "type": "rss",
+          "url": "https://www.behoerden-spiegel.de/feed/",
+          "verified": false
+        },
+        {
+          "name": "ESUT Europäische Sicherheit & Technik",
+          "type": "rss",
+          "url": "https://esut.de/feed/",
+          "verified": false
+        },
+        {
+          "name": "Polizeipraxis.de",
+          "type": "scrape",
+          "url": "https://www.polizeipraxis.de",
+          "verified": false
+        },
+        {
+          "name": "Defense News",
+          "type": "rss",
+          "url": "https://www.defensenews.com/arc/outboundfeeds/rss/",
+          "verified": false
+        },
+        {
+          "name": "VPAM (Prüfrichtlinien, Neuigkeiten)",
+          "type": "scrape",
+          "url": "https://www.vpam.eu",
+          "verified": false
+        },
+        {
+          "name": "Google News: VPAM / Schutzklasse",
+          "type": "gnews",
+          "query": "VPAM OR \"Schutzklasse\" Helm OR Weste",
+          "verified": false
+        },
+        {
+          "name": "Google News: Polizei Ausrüstung Helm",
+          "type": "gnews",
+          "query": "Polizei (Schutzhelm OR \"ballistischer Helm\" OR Schutzausstattung)",
+          "verified": false
+        },
+        {
+          "name": "Messen: Enforce Tac, Milipol, Eurosatory, DSEI, GPEC, AFCEA",
+          "type": "gnews",
+          "query": "\"Enforce Tac\" OR Milipol OR Eurosatory OR DSEI OR GPEC",
+          "verified": false
+        }
+      ],
+      "short": "Branche"
+    },
+    {
+      "id": "ki",
+      "name": "Künstliche Intelligenz",
+      "priority": 2,
+      "subtopics_default": [
+        "Neue Modelle & Produkte (Anthropic, OpenAI, Google, Meta, Mistral)",
+        "KI-Tools für den Arbeitsalltag",
+        "Regulierung (EU AI Act)",
+        "KI in Verteidigung & Sicherheit"
+      ],
+      "sources": [
+        {
+          "name": "The Decoder (DE)",
+          "type": "rss",
+          "url": "https://the-decoder.de/feed/",
+          "verified": false
+        },
+        {
+          "name": "heise online (alle, nach KI filtern)",
+          "type": "rss",
+          "url": "https://www.heise.de/rss/heise-atom.xml",
+          "verified": false,
+          "filter": "keywords"
+        },
+        {
+          "name": "Anthropic News",
+          "type": "scrape",
+          "url": "https://www.anthropic.com/news",
+          "verified": false
+        },
+        {
+          "name": "OpenAI News",
+          "type": "rss",
+          "url": "https://openai.com/news/rss.xml",
+          "verified": false
+        },
+        {
+          "name": "Google DeepMind Blog",
+          "type": "rss",
+          "url": "https://deepmind.google/blog/rss.xml",
+          "verified": false
+        },
+        {
+          "name": "Hugging Face Blog",
+          "type": "rss",
+          "url": "https://huggingface.co/blog/feed.xml",
+          "verified": false
+        },
+        {
+          "name": "MIT Technology Review AI",
+          "type": "rss",
+          "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+          "verified": false
+        },
+        {
+          "name": "The Verge AI",
+          "type": "rss",
+          "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+          "verified": false
+        },
+        {
+          "name": "Simon Willison",
+          "type": "rss",
+          "url": "https://simonwillison.net/atom/everything/",
+          "verified": false
+        },
+        {
+          "name": "Google News: EU AI Act",
+          "type": "gnews",
+          "query": "\"AI Act\" OR \"KI-Verordnung\"",
+          "verified": false
+        },
+        {
+          "name": "Google News: KI Verteidigung",
+          "type": "gnews",
+          "query": "KI (Bundeswehr OR Polizei OR Verteidigung)",
+          "verified": false
+        }
+      ],
+      "keywords": [
+        "KI",
+        "künstliche Intelligenz",
+        "AI",
+        "artificial intelligence",
+        "ChatGPT",
+        "OpenAI",
+        "Anthropic",
+        "Claude",
+        "Gemini",
+        "LLM",
+        "Sprachmodell",
+        "machine learning",
+        "maschinelles Lernen",
+        "Copilot",
+        "Mistral",
+        "DeepSeek",
+        "Llama",
+        "AI Act"
+      ],
+      "short": "KI"
+    },
+    {
+      "id": "weltpolitik",
+      "name": "Weltpolitik",
+      "priority": 3,
+      "sources": [
+        {
+          "name": "tagesschau Ausland",
+          "type": "rss",
+          "url": "https://www.tagesschau.de/ausland/index~rss2.xml",
+          "verified": false
+        },
+        {
+          "name": "tagesschau Top",
+          "type": "rss",
+          "url": "https://www.tagesschau.de/index~rss2.xml",
+          "verified": false
+        },
+        {
+          "name": "Deutsche Welle",
+          "type": "rss",
+          "url": "https://rss.dw.com/rdf/rss-de-all",
+          "verified": false
+        },
+        {
+          "name": "Spiegel Ausland",
+          "type": "rss",
+          "url": "https://www.spiegel.de/ausland/index.rss",
+          "verified": false
+        },
+        {
+          "name": "FAZ Politik",
+          "type": "rss",
+          "url": "https://www.faz.net/rss/aktuell/politik/",
+          "verified": false
+        },
+        {
+          "name": "BBC World",
+          "type": "rss",
+          "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+          "verified": false
+        },
+        {
+          "name": "The Guardian World",
+          "type": "rss",
+          "url": "https://www.theguardian.com/world/rss",
+          "verified": false
+        },
+        {
+          "name": "Politico Europe",
+          "type": "rss",
+          "url": "https://www.politico.eu/feed/",
+          "verified": false
+        },
+        {
+          "name": "Reuters (über Google News)",
+          "type": "gnews",
+          "query": "site:reuters.com world",
+          "verified": false
+        }
+      ],
+      "short": "Weltpolitik"
+    }
+  ],
+  "decisions": {
+    "date": "2026-10-05",
+    "confirmed_by": "Tobi",
+    "competitors": "Standardliste bestätigt",
+    "ki_subtopics": "Standard-Themen bestätigt",
+    "tender_regions": "EU- und NATO-weit"
+  }
+}
