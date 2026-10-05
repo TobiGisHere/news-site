@@ -217,6 +217,20 @@ def fetch_ted(topic, source, match=None):
             return pick_lang(v[0]) if v else ""
         return str(v or "")
 
+    # Weitere Seiten nachladen (max. 1000 Treffer)
+    notices = data.get("notices", [])
+    for page in range(2, 5):
+        if len(notices) >= (data.get("totalNoticeCount") or 0):
+            break
+        more = http_post_json(source["url"], {
+            "query": queries[qi], "fields": fields, "limit": 250, "page": page,
+            "scope": "ALL", "paginationMode": "PAGE_NUMBER",
+        }).get("notices", [])
+        if not more:
+            break
+        notices += more
+    data["notices"] = notices
+
     items = []
     if os.environ.get("GITHUB_ACTIONS"):
         print(f"::notice title=TED::Abfrage {qi + 1}, {len(data.get('notices', []))} Treffer, gesamt {data.get('totalNoticeCount')}")
