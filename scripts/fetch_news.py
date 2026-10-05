@@ -37,11 +37,10 @@ MAX_ITEMS_PER_TOPIC = 80
 MAX_AGE_DAYS = {"ausschreibungen": 120, "konkurrenz": 120, "branche": 30}
 DEFAULT_MAX_AGE_DAYS = 14
 
-# Kugelsichere Kleidung/Westen (35815…) und Schutzkopfbedeckungen/Helme (18444…).
-# 35113400 (Schutz- und Sicherheitskleidung) ist zu breit und liefert v. a. Arbeitskleidung.
-TED_CPV = ["35815000", "35815100", "18444000", "18444100", "18444110"]
-TED_CPV_PREFIXES = ("35815", "18444")
-TED_FULLTEXT = ['"ballistic helmet"', '"ballistischer Schutzhelm"', "Schutzhelm", "VPAM", '"bullet resistant"']
+# Nur Schutzkopfbedeckungen/Helme (18444…), keine Westen oder Schutzkleidung.
+TED_CPV = ["18444000", "18444100", "18444110"]
+TED_CPV_PREFIXES = ("18444",)
+TED_FULLTEXT = ['"ballistic helmet"', '"ballistischer Schutzhelm"', "Schutzhelm", "Gefechtshelm"]
 
 
 # ---------------------------------------------------------------- HTTP
@@ -100,6 +99,20 @@ def keyword_matcher(keywords):
         parts.append(r"(?i:\b(?:" + "|".join(map(re.escape, loose)) + r"))")
     rx = re.compile("|".join(parts))
     return lambda text: bool(rx.search(text or ""))
+
+
+def require_matcher(required, excluded=None):
+    """Teilwort-Suche ohne Groß/Klein: "helm" trifft auch "Schutzhelme" oder "Gefechtshelm"."""
+    if not required:
+        return None
+    req = re.compile("|".join(map(re.escape, required)), re.I)
+    exc = re.compile("|".join(map(re.escape, excluded)), re.I) if excluded else None
+
+    def check(text):
+        if exc:
+            text = exc.sub(" ", text or "")
+        return bool(req.search(text or ""))
+    return check
 
 
 def make_item(topic, source, title, link, published=None, summary="", publisher=None, extra=None):
@@ -213,7 +226,7 @@ def fetch_ted(topic, source, match=None):
         cpvs = n.get("classification-cpv") or []
         cpvs = [str(c) for c in (cpvs if isinstance(cpvs, list) else [cpvs])]
         # Volltext-Treffer nur behalten, wenn CPV passt oder der Titel einen Suchbegriff enthält
-        if not (any(c.startswith(TED_CPV_PREFIXES) for c in cpvs) or (match and match(title))):
+        if not any(c.startswith(TED_CPV_PREFIXES) for c in cpvs) and not (match and match(title)):
             continue
         deadline = to_iso(pick_lang(n.get("deadline-receipt-tender-date-lot")))
         country = pick_lang(n.get("buyer-country"))
@@ -318,9 +331,12 @@ def finalize(cfg, all_items):
     for topic in sorted(cfg["topics"], key=lambda t: t.get("priority", 9)):
         tid = topic["id"]
         max_age = dt.timedelta(days=MAX_AGE_DAYS.get(tid, DEFAULT_MAX_AGE_DAYS))
+        require = require_matcher(topic.get("require_keywords"), topic.get("exclude_keywords"))
         seen_links, seen_titles, items = set(), set(), []
         for it in sorted((i for i in all_items if i["topic"] == tid),
                          key=lambda i: i["published"] or "", reverse=True):
+            if require and not require(f"{it['title']} {it['summary']}"):
+                continue
             norm = re.sub(r"\W+", "", it["title"].lower())[:90]
             if it["link"] in seen_links or norm in seen_titles:
                 continue

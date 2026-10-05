@@ -6,7 +6,7 @@
   "topics": [
     {
       "id": "ausschreibungen",
-      "name": "Ausschreibungen ballistischer Schutz",
+      "name": "Ausschreibungen ballistische Helme",
       "priority": 1,
       "keywords": [
         "VPAM",
@@ -17,17 +17,12 @@
         "Titanhelm",
         "ballistic helmet",
         "bullet resistant helmet",
-        "Schutzweste",
-        "Visier",
         "ballistisch",
-        "kugelsicher",
         "Schutzhelm"
       ],
       "cpv": {
         "18444110": "Helme (Code beim Bau gegen CPV-Liste prüfen)",
-        "18444100": "Schutzkopfbedeckungen (prüfen)",
-        "35113400": "Schutz- und Sicherheitskleidung (prüfen)",
-        "35815100": "Kugelsichere Westen"
+        "18444100": "Schutzkopfbedeckungen (prüfen)"
       },
       "sources": [
         {
@@ -98,7 +93,29 @@
           "verified": false
         }
       ],
-      "short": "Ausschreibungen"
+      "short": "Ausschreibungen",
+      "require_keywords": [
+        "helm",
+        "kopfbedeckung",
+        "kask",
+        "casque",
+        "casco",
+        "κράνη",
+        "κράνος",
+        "kypär",
+        "hjelm",
+        "hjälm",
+        "sisak",
+        "čelad",
+        "prilba"
+      ],
+      "exclude_keywords": [
+        "wilhelm",
+        "helmut",
+        "helmstedt",
+        "overwhelm",
+        "helmholtz"
+      ]
     },
     {
       "id": "konkurrenz",
