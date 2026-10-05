@@ -273,3 +273,9 @@ table.tenders { width: 100%; border-collapse: collapse; }
 .main-col > .section-title { margin-bottom: -6px; }
 .meta.stale { color: var(--warn); }
 .meta.stale::after { content: " · Aktualisierung hängt"; }
+.cat { font-size: 12px; padding: 0 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.cat { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+@media (max-width: 640px) {
+  .country-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .country-chips button { flex: none; }
+}

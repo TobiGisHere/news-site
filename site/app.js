@@ -98,7 +98,18 @@
   const filtered = (topic) => filterItems(topic.items);
 
   const german = () => deutsch.checked;
-  const titleOf = (it) => (german() && it.ai?.title_de) || it.title;
+  // TED-Titel lauten "Land – Warengruppe – eigentlicher Titel": Land steht schon als Flagge daneben,
+  // die Warengruppe wird als kleine Zeile angezeigt
+  const tedParts = (title) => {
+    const p = String(title || "").split(" – ");
+    return p.length >= 3 ? { category: p[1], title: p.slice(2).join(" – ") } : null;
+  };
+  const isTed = (it) => it.topic === "ausschreibungen" && it.domain === "ted.europa.eu";
+  const titleOf = (it) => {
+    const t = (german() && it.ai?.title_de) || it.title;
+    return isTed(it) ? (tedParts(t)?.title || t) : t;
+  };
+  const categoryOf = (it) => isTed(it) ? tedParts(it.title)?.category : null;
   const topicShort = (id) => data.topics.find((t) => t.id === id)?.short || id;
   const summaryOf = (it) => (german() && it.ai?.summary) || it.summary;
   const hotBadge = (it) => it.ai?.score >= HOT
@@ -326,6 +337,7 @@
             ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
             ${hotBadge(it)}
             ${it.buyer ? `<span>${highlight(it.buyer, q)}</span>` : `<span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>`}
+            ${categoryOf(it) ? `<span class="cat">${escapeHtml(categoryOf(it))}</span>` : ""}
             ${starBtn(it)}
           </div>
           ${it.ai?.facts ? `<p class="facts">${escapeHtml(it.ai.facts)}</p>` : ""}
