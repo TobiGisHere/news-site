@@ -455,15 +455,16 @@ def fetch_openalex(topic, source):
 
 # ---------------------------------------------------------------- APIs
 
+# TED-Volltextsuche (Platzhalter * erlaubt). Mehrere einfache Abfragen statt einer großen,
+# weil sehr lange ODER-Ketten keine Treffer liefern.
+HELMET_WORDS = ("helm* OR helmet* OR casque* OR casco* OR caschi OR capacete* OR kask* OR hełm* OR přilb* OR prilb* "
+                "OR kacig* OR čelad* OR sisak* OR kypär* OR hjälm* OR hjelm* OR kiiver* OR šalm* OR ķiver*")
 TED_BALLISTIC_FT = [
-    '"ballistic helmet"', '"ballistic helmets"', '"bullet resistant helmet"', '"bulletproof helmet"', '"combat helmet"',
-    '"ballistischer Helm"', '"ballistische Helme"', '"ballistischer Schutzhelm"', '"ballistische Schutzhelme"', "Gefechtshelm",
-    "Gefechtshelme", "VPAM", '"casque balistique"', '"casques balistiques"', '"casque pare-balles"', '"casco balistico"',
-    '"caschi balistici"', '"casco balístico"', '"cascos balísticos"', '"capacete balístico"', '"hełm balistyczny"',
-    '"hełmy balistyczne"', '"hełm kuloodporny"', '"balistická přilba"', '"balistické přilby"', '"balistická prilba"',
-    '"ballistische helm"', '"ballistische helmen"', '"ballistisk hjälm"', '"ballistinen kypärä"', '"ballistiline kiiver"',
-    '"balistinis šalmas"', '"balistiskā ķivere"', '"balistična čelada"', '"balistička kaciga"', '"casca balistică"',
-    '"ballisztikus sisak"', '"балистична каска"', '"βαλλιστικό κράνος"', '"ballistisk hjelm"',
+    f"ballist* AND ({HELMET_WORDS})",
+    f"balist* AND ({HELMET_WORDS})",
+    f"VPAM AND ({HELMET_WORDS})",
+    f"(kuloodporn* OR pare-balles OR antibala* OR kogelwerend* OR neprůstřel* OR beschusshemm*) AND ({HELMET_WORDS})",
+    '"combat helmet" OR "combat helmets" OR Gefechtshelm* OR Kampfhelm*',
 ]
 
 
@@ -513,11 +514,15 @@ def fetch_ted(topic, source, match=None):
         return str(v or "")
 
     # 1) Volltextsuche nach ballistischen Helmen in allen EU-Sprachen, egal welcher CPV-Code
-    try:
-        ballistic, b_total, b_extra = run_query(
-            f"FT ~ ({' OR '.join(TED_BALLISTIC_FT)}) AND publication-date >= {since} SORT BY publication-date DESC")
-    except urllib.error.HTTPError as e:
-        ballistic, b_total, b_extra = [], f"Fehler {e.code}", False
+    ballistic, b_counts, b_extra = [], [], False
+    for ft in TED_BALLISTIC_FT:
+        try:
+            found, total, b_extra = run_query(f"FT ~ ({ft}) AND publication-date >= {since} SORT BY publication-date DESC")
+            ballistic += found
+            b_counts.append(str(total))
+        except urllib.error.HTTPError as e:
+            b_counts.append(f"Fehler {e.code}")
+    b_total = "/".join(b_counts)
     # 2) Alle Bekanntmachungen mit Helm-CPV-Codes
     by_cpv, c_total, _ = run_query(
         f"classification-cpv IN ({cpv}) AND publication-date >= {since} SORT BY publication-date DESC")
@@ -656,7 +661,7 @@ def finalize(cfg, all_items):
         for it in sorted((i for i in all_items if i["topic"] == tid),
                          key=lambda i: i["published"] or "", reverse=True):
             text = f"{it['title']} {it['summary']}"
-            if require and not require(text) and not it.get("ballistic"):
+            if require and not require(text):
                 continue
             if require_also and not require_also(text) and not it.get("ballistic"):
                 dropped.append(it)
