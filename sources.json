@@ -504,8 +504,19 @@
         "shipping",
         "procurement",
         "rearmament",
-        "armed forces"
-      ]
+        "armed forces",
+        "Marine",
+        "Pistorius",
+        "Drohne",
+        "Wehrpflicht",
+        "Wehretat",
+        "Kriegs",
+        "drone",
+        "navy",
+        "missile",
+        "Rakete"
+      ],
+      "filter_all": true
     }
   ],
   "decisions": {

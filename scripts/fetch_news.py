@@ -596,11 +596,14 @@ def finalize(cfg, all_items):
         max_age = dt.timedelta(days=MAX_AGE_DAYS.get(tid, DEFAULT_MAX_AGE_DAYS))
         require = require_matcher(topic.get("require_keywords"), topic.get("exclude_keywords"))
         require_also = require_matcher(topic.get("require_also_keywords"))
+        # Themen, deren Quellen alle gefiltert werden: Filter auch auf übernommene alte Meldungen anwenden
+        topic_match = keyword_matcher(topic.get("keywords")) if topic.get("filter_all") else None
         seen_links, seen_titles, items = set(), set(), []
         for it in sorted((i for i in all_items if i["topic"] == tid),
                          key=lambda i: i["published"] or "", reverse=True):
             text = f"{it['title']} {it['summary']}"
-            if (require and not require(text)) or (require_also and not require_also(text)):
+            if (require and not require(text)) or (require_also and not require_also(text)) \
+                    or (topic_match and not topic_match(text)):
                 continue
             norm = re.sub(r"\W+", "", it["title"].lower())[:90]
             if it["link"] in seen_links or norm in seen_titles:
