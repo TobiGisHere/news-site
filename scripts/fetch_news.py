@@ -607,6 +607,9 @@ def build_jobs(cfg):
     return jobs
 
 
+TITLE_ONLY = set()  # Themen, deren Stichwortfilter nur auf den Titel schaut (allgemeine Nachrichtenfeeds)
+
+
 def run_job(job, matchers, previous_links):
     match = matchers.get(job["topic"]) if job.get("filter") == "keywords" else None
     status = {"name": job["name"], "topic": job["topic"], "kind": job["kind"], "url": job["url"], "ok": False, "count": 0}
@@ -637,7 +640,7 @@ def run_job(job, matchers, previous_links):
             items = parse_feed(http_get(job["url"]), job["topic"], job["name"], is_gnews=job["kind"] == "gnews")
         total = len(items)
         if match:
-            items = [i for i in items if match(f"{i['title']} {i['summary']}")]
+            items = [i for i in items if match(i["title"] if job["topic"] in TITLE_ONLY else f"{i['title']} {i['summary']}")]
         status.update(ok=True, count=len(items), total=total)
         return status, items
     except Exception as e:  # noqa: BLE001 - jede Quelle darf einzeln scheitern
@@ -655,6 +658,7 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
         require_also = require_matcher(topic.get("require_also_keywords"))
         # Themen, deren Quellen alle gefiltert werden: Filter auch auf übernommene alte Meldungen anwenden
         topic_match = keyword_matcher(topic.get("keywords")) if topic.get("filter_all") else None
+        reject = require_matcher(topic.get("reject_keywords"))
         seen_links, seen_titles, items, dropped = set(), set(), [], []
         for it in sorted((i for i in all_items if i["topic"] == tid),
                          key=lambda i: i["published"] or "", reverse=True):
@@ -664,7 +668,9 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
             if require_also and not require_also(text) and not it.get("ballistic"):
                 dropped.append(it)
                 continue
-            if topic_match and not topic_match(text):
+            if topic_match and not topic_match(it["title"] if topic.get("title_only") else text):
+                continue
+            if reject and reject(text):
                 continue
             norm = re.sub(r"\W+", "", it["title"].lower())[:90]
             if it["link"] in seen_links or norm in seen_titles:
@@ -706,6 +712,7 @@ def load_previous():
 def main():
     cfg = json.loads(SOURCES.read_text(encoding="utf-8"))
     topic_ids = {t["id"] for t in cfg["topics"]}
+    TITLE_ONLY.update(t["id"] for t in cfg["topics"] if t.get("title_only"))
     prev_data = load_previous()
     previous = [i for t in prev_data.get("topics", []) for i in t.get("items", []) if i.get("topic") in topic_ids]
     ai_cache = dict(prev_data.get("ai_cache") or {})
