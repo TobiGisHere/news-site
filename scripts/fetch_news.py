@@ -425,27 +425,45 @@ def fetch_simap(topic, source):
 
 # ---------------------------------------------------------------- APIs
 
+TED_BALLISTIC_FT = [
+    '"ballistic helmet"', '"ballistic helmets"', '"bullet resistant helmet"', '"bulletproof helmet"', '"combat helmet"',
+    '"ballistischer Helm"', '"ballistische Helme"', '"ballistischer Schutzhelm"', '"ballistische Schutzhelme"', "Gefechtshelm",
+    "Gefechtshelme", "VPAM", '"casque balistique"', '"casques balistiques"', '"casque pare-balles"', '"casco balistico"',
+    '"caschi balistici"', '"casco balístico"', '"cascos balísticos"', '"capacete balístico"', '"hełm balistyczny"',
+    '"hełmy balistyczne"', '"hełm kuloodporny"', '"balistická přilba"', '"balistické přilby"', '"balistická prilba"',
+    '"ballistische helm"', '"ballistische helmen"', '"ballistisk hjälm"', '"ballistinen kypärä"', '"ballistiline kiiver"',
+    '"balistinis šalmas"', '"balistiskā ķivere"', '"balistična čelada"', '"balistička kaciga"', '"casca balistică"',
+    '"ballisztikus sisak"', '"балистична каска"', '"βαλλιστικό κράνος"', '"ballistisk hjelm"',
+]
+
+
 def fetch_ted(topic, source, match=None):
     since = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS["ausschreibungen"])).strftime("%Y%m%d")
     cpv = " ".join(TED_CPV)
-    queries = [
-        f"(classification-cpv IN ({cpv}) OR FT ~ ({' OR '.join(TED_FULLTEXT)})) AND publication-date >= {since} SORT BY publication-date DESC",
-        f"classification-cpv IN ({cpv}) AND publication-date >= {since} SORT BY publication-date DESC",
-    ]
-    fields = ["publication-number", "notice-title", "buyer-name", "buyer-country",
-              "publication-date", "deadline-receipt-tender-date-lot", "notice-type", "classification-cpv"]
-    last_err = None
-    for qi, q in enumerate(queries):
-        try:
-            data = http_post_json(source["url"], {
-                "query": q, "fields": fields, "limit": 250, "page": 1,
-                "scope": "ALL", "paginationMode": "PAGE_NUMBER",
-            })
-            break
-        except urllib.error.HTTPError as e:
-            last_err = e
-    else:
-        raise last_err
+    base_fields = ["publication-number", "notice-title", "buyer-name", "buyer-country",
+                   "publication-date", "deadline-receipt-tender-date-lot", "notice-type", "classification-cpv"]
+    # Los-Titel und -Beschreibung, damit der Ballistik-Filter auch den Text sieht (falls die API die Felder kennt)
+    extra_fields = ["title-lot", "description-lot"]
+
+    def run_query(q):
+        fields = base_fields + extra_fields
+        notices, page, total = [], 1, None
+        while page <= 4:
+            try:
+                data = http_post_json(source["url"], {"query": q, "fields": fields, "limit": 250, "page": page,
+                                                      "scope": "ALL", "paginationMode": "PAGE_NUMBER"})
+            except urllib.error.HTTPError as e:
+                if e.code == 400 and fields != base_fields:
+                    fields = base_fields
+                    continue
+                raise
+            batch = data.get("notices", [])
+            notices += batch
+            total = data.get("totalNoticeCount") or 0
+            if not batch or len(notices) >= total:
+                break
+            page += 1
+        return notices, total, fields != base_fields
 
     def pick_lang(v):
         if isinstance(v, dict):
@@ -457,46 +475,50 @@ def fetch_ted(topic, source, match=None):
             return pick_lang(v[0]) if v else ""
         return str(v or "")
 
-    # Weitere Seiten nachladen (max. 1000 Treffer)
-    notices = data.get("notices", [])
-    for page in range(2, 5):
-        if len(notices) >= (data.get("totalNoticeCount") or 0):
-            break
-        more = http_post_json(source["url"], {
-            "query": queries[qi], "fields": fields, "limit": 250, "page": page,
-            "scope": "ALL", "paginationMode": "PAGE_NUMBER",
-        }).get("notices", [])
-        if not more:
-            break
-        notices += more
-    data["notices"] = notices
+    def all_text(v):
+        if isinstance(v, dict):
+            return " ".join(all_text(x) for x in v.values())
+        if isinstance(v, list):
+            return " ".join(all_text(x) for x in v)
+        return str(v or "")
 
-    items = []
+    # 1) Volltextsuche nach ballistischen Helmen in allen EU-Sprachen, egal welcher CPV-Code
+    try:
+        ballistic, b_total, b_extra = run_query(
+            f"FT ~ ({' OR '.join(TED_BALLISTIC_FT)}) AND publication-date >= {since} SORT BY publication-date DESC")
+    except urllib.error.HTTPError as e:
+        ballistic, b_total, b_extra = [], f"Fehler {e.code}", False
+    # 2) Alle Bekanntmachungen mit Helm-CPV-Codes
+    by_cpv, c_total, _ = run_query(
+        f"classification-cpv IN ({cpv}) AND publication-date >= {since} SORT BY publication-date DESC")
     if os.environ.get("GITHUB_ACTIONS"):
-        print(f"::notice title=TED::Abfrage {qi + 1}, {len(data.get('notices', []))} Treffer, gesamt {data.get('totalNoticeCount')}")
-    for n in data.get("notices", []):
-        pub_no = n.get("publication-number")
-        if not pub_no:
-            continue
-        title = pick_lang(n.get("notice-title"))
-        cpvs = n.get("classification-cpv") or []
-        cpvs = [str(c) for c in (cpvs if isinstance(cpvs, list) else [cpvs])]
-        # Volltext-Treffer nur behalten, wenn CPV passt oder der Titel einen Suchbegriff enthält
-        if not any(c.startswith(TED_CPV_PREFIXES) for c in cpvs) and not (match and match(title)):
-            continue
-        deadline = to_iso(pick_lang(n.get("deadline-receipt-tender-date-lot")))
-        country = pick_lang(n.get("buyer-country"))
-        buyer = pick_lang(n.get("buyer-name"))
-        it = make_item(
-            topic, source["name"], title or f"TED {pub_no}",
-            f"https://ted.europa.eu/de/notice/-/detail/{pub_no}",
-            to_iso(pick_lang(n.get("publication-date"))),
-            " · ".join(x for x in (buyer, country) if x),
-            publisher="TED",
-            extra={"deadline": deadline, "buyer": buyer or None, "country": country or None, "domain": "ted.europa.eu"},
-        )
-        if it:
-            items.append(it)
+        print(f"::notice title=TED::Ballistik-Volltext: {len(ballistic)} von {b_total}, Helm-CPV: {len(by_cpv)} von {c_total}, Losfelder: {b_extra}")
+
+    items, seen = [], set()
+    for is_ballistic, notices in ((True, ballistic), (False, by_cpv)):
+        for n in notices:
+            pub_no = n.get("publication-number")
+            if not pub_no or pub_no in seen:
+                continue
+            seen.add(pub_no)
+            title = pick_lang(n.get("notice-title"))
+            cpvs = n.get("classification-cpv") or []
+            cpvs = [str(c) for c in (cpvs if isinstance(cpvs, list) else [cpvs])]
+            lot_text = clean_text(f"{all_text(n.get('title-lot'))} {all_text(n.get('description-lot'))}", 600)
+            deadline = to_iso(pick_lang(n.get("deadline-receipt-tender-date-lot")))
+            country = pick_lang(n.get("buyer-country"))
+            buyer = pick_lang(n.get("buyer-name"))
+            it = make_item(
+                topic, source["name"], title or f"TED {pub_no}",
+                f"https://ted.europa.eu/de/notice/-/detail/{pub_no}",
+                to_iso(pick_lang(n.get("publication-date"))),
+                " · ".join(x for x in (buyer, lot_text) if x),
+                publisher="TED",
+                extra={"deadline": deadline, "buyer": buyer or None, "country": country or None,
+                       "domain": "ted.europa.eu", "ballistic": is_ballistic or None},
+            )
+            if it:
+                items.append(it)
     return items
 
 
@@ -598,12 +620,16 @@ def finalize(cfg, all_items):
         require_also = require_matcher(topic.get("require_also_keywords"))
         # Themen, deren Quellen alle gefiltert werden: Filter auch auf übernommene alte Meldungen anwenden
         topic_match = keyword_matcher(topic.get("keywords")) if topic.get("filter_all") else None
-        seen_links, seen_titles, items = set(), set(), []
+        seen_links, seen_titles, items, dropped = set(), set(), [], []
         for it in sorted((i for i in all_items if i["topic"] == tid),
                          key=lambda i: i["published"] or "", reverse=True):
             text = f"{it['title']} {it['summary']}"
-            if (require and not require(text)) or (require_also and not require_also(text)) \
-                    or (topic_match and not topic_match(text)):
+            if require and not require(text) and not it.get("ballistic"):
+                continue
+            if require_also and not require_also(text) and not it.get("ballistic"):
+                dropped.append(it)
+                continue
+            if topic_match and not topic_match(text):
                 continue
             norm = re.sub(r"\W+", "", it["title"].lower())[:90]
             if it["link"] in seen_links or norm in seen_titles:
@@ -617,6 +643,10 @@ def finalize(cfg, all_items):
             seen_links.add(it["link"])
             seen_titles.add(norm)
             items.append(it)
+        if dropped and os.environ.get("GITHUB_ACTIONS"):
+            recent = [d for d in dropped if (d["published"] or "") >= (now - dt.timedelta(days=180)).isoformat()]
+            lines = "%0A".join(f"{(d['published'] or '')[:10]} {d['title'][:110]}".replace("%", "%25") for d in recent[:40])
+            print(f"::notice title=Aussortiert {topic.get('short', tid)} ({len(recent)} letzte 180 Tage)::{lines}")
         topics_out.append({"id": tid, "name": topic["name"], "short": topic.get("short", topic["name"]), "priority": topic.get("priority"),
                            "items": items[:MAX_ITEMS_PER_TOPIC]})
     return topics_out
