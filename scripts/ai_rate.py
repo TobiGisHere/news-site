@@ -27,7 +27,9 @@ GITHUB_MAX_BATCHES = 8
 GITHUB_PAUSE = 5
 # Google Gemini: kostenloser Schlüssel aus Google AI Studio, OpenAI-kompatible Schnittstelle
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+# Bei Überlastung (HTTP 503) oder unbekanntem Modell (404) wird das nächste Modell probiert
+GEMINI_MODELS = [m for m in [os.environ.get("GEMINI_MODEL"), "gemini-flash-latest", "gemini-flash-lite-latest",
+                             "gemini-2.5-flash", "gemini-2.5-flash-lite"] if m]
 GEMINI_MAX_BATCHES = 20
 # Meldungen unter dieser Relevanz werden ausgeblendet (Ausschreibungen etwas großzügiger)
 MIN_SCORE = {"ausschreibungen": 3, "zuschlaege": 3, "schuberth": 3}
@@ -234,8 +236,25 @@ def rate(topics, cache):
     else:
         if gemini_key:
             provider, limit = "Gemini", GEMINI_MAX_BATCHES
-            call = lambda b: _github_request(GEMINI_URL, GEMINI_MODEL, False, b, gemini_key, 8000)  # noqa: E731
-            _working.append((GEMINI_URL, GEMINI_MODEL, False))
+            models = list(dict.fromkeys(GEMINI_MODELS))
+
+            def call(b):
+                last = None
+                for attempt in range(len(models) * 2):
+                    try:
+                        res = _github_request(GEMINI_URL, models[0], False, b, gemini_key, 8000)
+                        if not _working:
+                            _working.append((GEMINI_URL, models[0], False))
+                        return res
+                    except urllib.error.HTTPError as e:
+                        last = e
+                        if e.code in (500, 502, 503, 504) and attempt % 2 == 0:
+                            time.sleep(8)          # kurz warten, dann gleiches Modell noch einmal
+                        elif e.code in (404, 500, 502, 503, 504) and len(models) > 1:
+                            models.pop(0)          # nächstes Modell
+                        else:
+                            raise
+                raise last
         else:
             provider, limit = "GitHub Models", GITHUB_MAX_BATCHES
             call = lambda b: _call_github(b, github_token)  # noqa: E731
