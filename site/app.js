@@ -7,12 +7,40 @@
   const HOT = 8;             // ab dieser KI-Relevanz gilt eine Meldung als wichtig
   const TOPIC_META = {
     ausschreibungen: { icon: "🪖", color: "var(--t-ausschreibungen)" },
+    zuschlaege: { icon: "🏆", color: "var(--t-ausschreibungen)" },
     konkurrenz: { icon: "🏢", color: "var(--t-konkurrenz)" },
+    schuberth: { icon: "⭐", color: "var(--t-schuberth)" },
     branche: { icon: "🛡️", color: "var(--t-branche)" },
     technologie: { icon: "🔬", color: "var(--t-technologie)" },
+    normen: { icon: "📏", color: "var(--t-technologie)" },
     weltpolitik: { icon: "🌍", color: "var(--t-weltpolitik)" },
   };
   const meta = (id) => TOPIC_META[id] || { icon: "📰", color: "var(--accent)" };
+
+  // Hauptreiter mit Unterbereichen: neue Rubriken kommen als Unterbereich dazu, nicht als eigener Reiter
+  const SECTIONS = [
+    { id: "ausschreibungen", label: "Ausschreibungen", icon: "🪖", color: "var(--t-ausschreibungen)",
+      subs: [["ausschreibungen", "Offen"], ["zuschlaege", "Zuschläge"]] },
+    { id: "markt", label: "Markt", icon: "🏢", color: "var(--t-konkurrenz)",
+      subs: [["konkurrenz", "Wettbewerber"], ["schuberth", "Schuberth"], ["branche", "Branche"]] },
+    { id: "technik", label: "Technik & Normen", icon: "🔬", color: "var(--t-technologie)",
+      subs: [["technologie", "Forschung"], ["normen", "Normen"]] },
+    { id: "weltpolitik", label: "Geopolitik", icon: "🌍", color: "var(--t-weltpolitik)", subs: [["weltpolitik", "Geopolitik"]] },
+  ];
+  const VIEWS = ["alle", "termine", "gemerkt", "profil"];
+
+  // Wichtigste Wettbewerber mit eigener Profilseite. Namen in "aliases" (klein geschrieben) ordnen
+  // Meldungen, Gewinner und Bieter der Firma zu.
+  const PROFILES = [
+    { id: "busch", name: "Busch PROtective", country: "DEU", url: "https://busch-protective.com",
+      aliases: ["busch protective", "busch-protective", "busch defence", "šestan-busch", "sestan-busch"] },
+    { id: "mehler", name: "Mehler", country: "DEU", url: "https://mehler-systems.com",
+      aliases: ["mehler"] },
+    { id: "galvion", name: "Galvion", country: "CAN", url: "https://www.galvion.com",
+      aliases: ["galvion", "revision military"] },
+  ];
+  const OWN = ["schuberth"];
+  const matches = (text, aliases) => { const t = String(text || "").toLowerCase(); return aliases.some((a) => t.includes(a)); };
 
   // ISO-3 → ISO-2 für Flaggen (EU, EWR, NATO, UK, CH)
   const ISO3 = { AUT: "AT", BEL: "BE", BGR: "BG", HRV: "HR", CYP: "CY", CZE: "CZ", DNK: "DK", EST: "EE", FIN: "FI", FRA: "FR",
@@ -30,11 +58,20 @@
   };
 
   const $ = (sel) => document.querySelector(sel);
+  const savedBtn = $("#saved-btn");
   const grid = $("#grid"), tabs = $("#tabs"), search = $("#search"), kpis = $("#kpis"), onlyNew = $("#only-new"), deutsch = $("#deutsch"), briefing = $("#briefing"), since = $("#since");
   const lastVisit = store.get(LAST_VISIT_KEY);
   let data = null;
   // Reiter aus dem Link (#ausschreibungen) hat Vorrang, damit man Ansichten teilen kann
-  let activeTab = decodeURIComponent(location.hash.slice(1)) || store.get(TAB_KEY) || "alle";
+  // Ansicht: "#markt/schuberth" = Reiter Markt, Unterbereich Schuberth; alte Links wie "#konkurrenz" gehen weiter
+  let activeTab = "alle", activeSub = null, activeProfile = null;
+  function parseView(hash) {
+    const [a = "alle", b = null] = decodeURIComponent(hash || "").split("/");
+    const legacy = SECTIONS.find((s) => s.subs.some(([id]) => id === a) && s.id !== a);
+    if (legacy) return { tab: legacy.id, sub: a };
+    if (a === "profil") return { tab: "profil", sub: null, profile: b };
+    return { tab: a, sub: b };
+  }
   let fairs = [];
   const expanded = new Set();
   let tenderCountry = "";
@@ -71,6 +108,10 @@
     return { cls: days <= 7 ? "soon" : "", text, title: `Frist ${fmtDate(deadline)}` };
   }
 
+  const sectionOf = (topicId) => SECTIONS.find((s) => s.subs.some(([id]) => id === topicId));
+  const topicById = (id) => data.topics.find((t) => t.id === id);
+  // Nur Unterbereiche anzeigen, die es in den Daten gibt (ältere news.json kennt neue Rubriken noch nicht)
+  const subsOf = (sec) => sec.subs.filter(([id]) => topicById(id));
   const isNew = (it) => lastVisit && it.published && it.published > lastVisit;
 
   function escapeHtml(s) {
@@ -104,7 +145,7 @@
     const p = String(title || "").split(" – ");
     return p.length >= 3 ? { category: p[1], title: p.slice(2).join(" – ") } : null;
   };
-  const isTed = (it) => it.topic === "ausschreibungen" && it.domain === "ted.europa.eu";
+  const isTed = (it) => ["ausschreibungen", "zuschlaege"].includes(it.topic) && it.domain === "ted.europa.eu";
   const titleOf = (it) => {
     const t = (german() && it.ai?.title_de) || it.title;
     return isTed(it) ? (tedParts(t)?.title || t) : t;
@@ -122,15 +163,29 @@
   // ------------------------------------------------------------ Reiter
 
   function renderTabs() {
+    const current = activeTab === "profil" ? "markt" : activeTab;
     const btn = (id, label, badge, color) =>
-      `<button type="button" data-tab="${id}" aria-pressed="${activeTab === id}" style="--tc:${color}">${label}${badge ? `<span class="badge">${badge}</span>` : ""}</button>`;
+      `<button type="button" data-tab="${id}" aria-pressed="${current === id}" style="--tc:${color}">${label}${badge ? `<span class="badge">${badge}</span>` : ""}</button>`;
     const newBadge = (n) => n ? `${n} neu` : "";
     const totalNew = data.topics.reduce((n, t) => n + t.items.filter(isNew).length, 0);
-    const nSaved = Object.keys(saved).length;
     tabs.innerHTML = btn("alle", "Überblick", newBadge(totalNew), "var(--text)") +
-      data.topics.map((t) => btn(t.id, `${meta(t.id).icon} ${escapeHtml(t.short || t.name)}`, newBadge(t.items.filter(isNew).length), meta(t.id).color)).join("") +
-      btn("termine", "📅 Messen", "", "var(--t-konkurrenz)") +
-      btn("gemerkt", "⭐ Merkliste", nSaved ? String(nSaved) : "", "var(--star)");
+      SECTIONS.filter((s) => subsOf(s).length).map((s) => {
+        const n = subsOf(s).reduce((k, [id]) => k + topicById(id).items.filter(isNew).length, 0);
+        return btn(s.id, `${s.icon} ${escapeHtml(s.label)}`, newBadge(n), s.color);
+      }).join("") +
+      btn("termine", "📅 Termine", "", "var(--t-konkurrenz)");
+    const nSaved = Object.keys(saved).length;
+    savedBtn.innerHTML = `${activeTab === "gemerkt" ? "★" : "☆"} Merkliste${nSaved ? ` <b>${nSaved}</b>` : ""}`;
+    savedBtn.setAttribute("aria-pressed", activeTab === "gemerkt");
+  }
+
+  function subTabs(sec) {
+    const subs = subsOf(sec);
+    if (subs.length < 2) return "";
+    return `<nav class="subtabs" style="--tc:${sec.color}">${subs.map(([id, label]) => {
+      const t = topicById(id), n = t.items.filter(isNew).length;
+      return `<button type="button" data-sub="${id}" aria-pressed="${activeSub === id}">${meta(id).icon} ${escapeHtml(label)} <b>${t.items.length}</b>${n ? `<span class="badge">${n} neu</span>` : ""}</button>`;
+    }).join("")}</nav>`;
   }
 
   // ------------------------------------------------------------ Briefing
@@ -181,6 +236,7 @@
     const newTenders = tenders.filter((i) => i.published && new Date(i.published) > now - 30 * 86400000);
     const all = data.topics.flatMap((t) => t.items);
     const lastWeek = all.filter((i) => i.published && new Date(i.published) > week);
+    const awards = (topicById("zuschlaege")?.items || []).filter((i) => i.published && new Date(i.published) > now - 365 * 86400000);
     const papers = all.filter((i) => i.kind === "paper" && i.published && new Date(i.published) > now - 30 * 86400000);
     const fair = upcomingFairs()[0];
     const card = (tab, value, label, sub, color) => `<button type="button" class="kpi" data-kpi="${tab}" style="--tc:${color}">
@@ -189,7 +245,8 @@
       card("ausschreibungen", open.length, "offene Ausschreibungen",
         soon.length ? `${soon.length} mit Frist in 14 Tagen` : "keine Frist in 14 Tagen", "var(--t-ausschreibungen)") +
       card("ausschreibungen", newTenders.length, "neue Ausschreibungen", "letzte 30 Tage", "var(--t-ausschreibungen)") +
-      card("alle", lastWeek.length, "Meldungen", "letzte 7 Tage", "var(--new)") +
+      (topicById("zuschlaege") ? card("zuschlaege", awards.length, "Zuschläge", "letzte 12 Monate", "var(--t-ausschreibungen)")
+        : card("alle", lastWeek.length, "Meldungen", "letzte 7 Tage", "var(--new)")) +
       card("technologie", papers.length, "Fachartikel", "letzte 30 Tage", "var(--t-technologie)") +
       (fair ? card("termine", daysUntil(fair.start) <= 0 ? "läuft" : `${daysUntil(fair.start)} T.`, escapeHtml(fair.name),
         `${fmtDate(fair.start)} · ${escapeHtml(fair.city)}`, "var(--t-konkurrenz)") : "");
@@ -220,13 +277,16 @@
     if (!show) return;
 
     const twoDays = Date.now() - 2 * 86400000;
-    const leads = data.topics.filter((t) => t.id !== "ausschreibungen").map((t) => {
+    const NEWS = (t) => !["ausschreibungen", "zuschlaege"].includes(t.id);
+    const leads = data.topics.filter(NEWS).map((t) => {
       const recent = t.items.filter((i) => i.published && new Date(i.published) > twoDays);
       const pool = recent.length ? recent : t.items;
       const top = Math.max(-1, ...pool.map((i) => i.ai?.score ?? -1));
       const best = pool.filter((i) => (i.ai?.score ?? -1) === top);
       return { topic: t, item: best.find((i) => i.image) || best[0] };
-    }).filter((l) => l.item);
+    }).filter((l) => l.item)
+      .sort((a, b) => ((b.item.ai?.score ?? 5) - (a.item.ai?.score ?? 5)) || (b.item.published || "").localeCompare(a.item.published || ""))
+      .slice(0, 4);
 
     const tenders = data.topics.find((t) => t.id === "ausschreibungen")?.items || [];
     const open = tenders.filter((i) => i.deadline && new Date(i.deadline) > Date.now())
@@ -236,7 +296,7 @@
     // Das Wichtigste der Woche: nach KI-Relevanz, sonst nach Datum, ohne die Top-Meldungen oben
     const leadLinks = new Set(leads.map((l) => l.item.link));
     const week = Date.now() - 7 * 86400000;
-    const digest = data.topics.filter((t) => t.id !== "ausschreibungen")
+    const digest = data.topics.filter(NEWS)
       .flatMap((t) => t.items.filter((i) => i.published && new Date(i.published) > week && !leadLinks.has(i.link)))
       .sort((a, b) => ((b.ai?.score ?? 5) - (a.ai?.score ?? 5)) || b.published.localeCompare(a.published))
       .slice(0, 8);
@@ -294,7 +354,7 @@
     </li>`;
   }
 
-  function renderGroupedItems(items, q) {
+  function renderGroupedItems(items, q, withTopic = false) {
     let html = "", current = null, open = false;
     for (const it of items) {
       const label = dayLabel(it.published);
@@ -303,7 +363,7 @@
         html += `<h3 class="day">${escapeHtml(label)}</h3><ol class="items">`;
         current = label; open = true;
       }
-      html += renderItem(it, q);
+      html += renderItem(it, q, withTopic);
     }
     return html + (open ? "</ol>" : "");
   }
@@ -393,10 +453,161 @@
     </section>`;
   }
 
+  // ------------------------------------------------------------ Zuschläge
+
+  const fmtMoney = (v, cur) => v == null ? "" : new Intl.NumberFormat("de-DE", { style: "currency", currency: cur || "EUR", maximumFractionDigits: v >= 1e6 ? 1 : 0, notation: v >= 1e6 ? "compact" : "standard" }).format(v);
+  const whoTag = (name) => {
+    if (matches(name, OWN)) return "own";
+    return PROFILES.find((p) => matches(name, p.aliases))?.id || "";
+  };
+  function companyChip(name) {
+    const tag = whoTag(name);
+    const prof = tag && tag !== "own" ? PROFILES.find((p) => p.id === tag) : null;
+    return prof ? `<a class="co co-rival" href="#profil/${prof.id}" title="Profil öffnen">${escapeHtml(name)}</a>`
+      : `<span class="co${tag === "own" ? " co-own" : ""}">${escapeHtml(name)}</span>`;
+  }
+
+  function winnerRanking(items) {
+    const count = new Map();
+    for (const it of items) for (const w of it.winners || []) {
+      const key = w.toLowerCase().replace(/\b(gmbh|ltd|limited|inc|s\.?a\.?|oy|ab|as|oü|osaühing|sp\. z o\.o\.|s\.r\.o\.|srl|spa)\b|[.,]/g, "").trim();
+      const e = count.get(key) || { name: w, n: 0 };
+      e.n += 1; count.set(key, e);
+    }
+    const top = [...count.values()].sort((a, b) => b.n - a.n).slice(0, 8);
+    if (!top.length) return "";
+    return `<div class="ranking"><span class="ranking-label">Häufigste Gewinner:</span>${top.map((e) =>
+      `${companyChip(e.name)}<b>${e.n}×</b>`).join("")}</div>`;
+  }
+
+  function renderAwardTable(topic, q) {
+    const items = filtered(topic).sort((a, b) => (b.published || "").localeCompare(a.published || ""));
+    const withWinner = items.filter((i) => i.winners?.length).length;
+    const row = (it) => `<tr>
+        <td class="t-flag" title="${escapeHtml(it.country || "")}">${it.country ? flag(it.country) : "🌐"}<small>${escapeHtml(it.country || "")}</small></td>
+        <td class="t-main">
+          <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
+          <div class="item-meta">
+            ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
+            ${hotBadge(it)}
+            ${it.buyer ? `<span>${highlight(it.buyer, q)}</span>` : ""}
+            ${categoryOf(it) ? `<span class="cat">${escapeHtml(categoryOf(it))}</span>` : ""}
+            ${starBtn(it)}
+          </div>
+          ${it.ai?.facts ? `<p class="facts">${escapeHtml(it.ai.facts)}</p>` : ""}
+        </td>
+        <td class="t-win">${it.winners?.length ? it.winners.map(companyChip).join("") : `<span class="t-none">nicht angegeben</span>`}
+          ${it.bidders?.length ? `<details class="bidders"><summary>${it.bidders.length} weitere Bieter</summary>${it.bidders.map(companyChip).join("")}</details>` : ""}</td>
+        <td class="t-val">${it.value ? fmtMoney(it.value, it.currency) : "–"}</td>
+        <td class="t-pub">${it.published ? fmtDate(it.published) : "–"}</td>
+      </tr>`;
+    return `<section class="tile tender-view" style="--tc:${meta(topic.id).color}">
+      <header class="tile-head">
+        <span class="tile-icon">${meta(topic.id).icon}</span>
+        <h2>${escapeHtml(topic.name)}</h2>
+        <span class="count">${items.length} Zuschläge · ${withWinner} mit Gewinner</span>
+      </header>
+      ${winnerRanking(items)}
+      ${items.length ? `<div class="table-wrap"><table class="tenders awards">
+        <thead><tr><th>Land</th><th>Zuschlag</th><th>Gewinner</th><th>Wert</th><th>Bekannt seit</th></tr></thead>
+        <tbody>${items.map(row).join("")}</tbody></table></div>`
+        : `<p class="empty">${topic.items.length ? "Keine Treffer." : "Noch keine Zuschläge zu ballistischen Helmen."}</p>`}
+      <p class="empty small">Quelle: Zuschlagsbekanntmachungen auf TED. Gewinner und Bieter stehen nur in Bekanntmachungen ab 2024 (eForms). <span class="co co-own">Schuberth</span> ist grün markiert, Wettbewerber mit Profil sind anklickbar.</p>
+    </section>`;
+  }
+
+  // ------------------------------------------------------------ Wettbewerberprofile
+
+  function profileData(p) {
+    const news = data.topics.filter((t) => !["ausschreibungen", "zuschlaege"].includes(t.id))
+      .flatMap((t) => t.items).filter((i) => matches(`${i.title} ${i.source} ${i.via || ""}`, p.aliases))
+      .sort((a, b) => (b.published || "").localeCompare(a.published || ""));
+    const awards = topicById("zuschlaege")?.items || [];
+    const won = awards.filter((i) => (i.winners || []).some((w) => matches(w, p.aliases)));
+    const bid = awards.filter((i) => !won.includes(i) && (i.bidders || []).some((w) => matches(w, p.aliases)));
+    return { news, won, bid };
+  }
+
+  function profileCards() {
+    const month = Date.now() - 30 * 86400000;
+    return `<div class="profiles">${PROFILES.map((p) => {
+      const d = profileData(p);
+      const recent = d.news.filter((i) => i.published && new Date(i.published) > month).length;
+      return `<a class="profile-card" href="#profil/${p.id}">
+        <span class="profile-name">${flag(p.country)} ${escapeHtml(p.name)}</span>
+        <span class="profile-stats"><b>${recent}</b> Meldungen (30 Tage) · <b>${d.won.length}</b> Zuschläge</span>
+        <span class="profile-go">Profil öffnen →</span>
+      </a>`;
+    }).join("")}</div>`;
+  }
+
+  function renderProfile(id, q) {
+    const p = PROFILES.find((x) => x.id === id);
+    if (!p) return `<p class="empty">Profil nicht gefunden.</p>`;
+    const d = profileData(p);
+    const awardList = (list) => `<ol class="items">${list.map((it) => tenderRow(it, q).replace('class="tender', 'class="item tender')).join("")}</ol>`;
+    return `<section class="tile profile" style="--tc:var(--t-konkurrenz)">
+      <header class="tile-head">
+        <button type="button" class="back" data-sub="konkurrenz" title="Zurück zu den Wettbewerbern">←</button>
+        <h2>${flag(p.country)} ${escapeHtml(p.name)}</h2>
+        <a class="count" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(p.url.replace(/^https?:\/\/(www\.)?/, ""))} ↗</a>
+      </header>
+      <div class="profile-kpis">
+        <span><b>${d.news.length}</b> Meldungen</span><span><b>${d.won.length}</b> gewonnene Zuschläge</span><span><b>${d.bid.length}</b> weitere Verfahren als Bieter</span>
+      </div>
+      <h3 class="day">Gewonnene Zuschläge</h3>
+      ${d.won.length ? awardList(d.won) : `<p class="empty">Keine Zuschläge zu ballistischen Helmen auf TED gefunden.</p>`}
+      ${d.bid.length ? `<h3 class="day">Als Bieter beteiligt</h3>${awardList(d.bid)}` : ""}
+      <h3 class="day">Meldungen</h3>
+      ${d.news.length ? `<ol class="items">${d.news.slice(0, 30).map((it) => renderItem(it, q, true)).join("")}</ol>` : `<p class="empty">Noch keine Meldungen.</p>`}
+    </section>`;
+  }
+
+  // ------------------------------------------------------------ Ansichten
+
+  function topicTile(topic, q) {
+    const items = filtered(topic);
+    return `<section class="tile" style="--tc:${meta(topic.id).color}">
+      <header class="tile-head">
+        <span class="tile-icon">${meta(topic.id).icon}</span>
+        <h2>${escapeHtml(topic.name)}</h2>
+        <span class="count">${items.length === topic.items.length ? `${items.length} Meldungen` : `${items.length} von ${topic.items.length}`}</span>
+      </header>
+      ${topic.note ? `<p class="tile-note">${escapeHtml(topic.note)}</p>` : ""}
+      ${items.length ? renderGroupedItems(items, q) : `<p class="empty">${topic.items.length ? "Keine Treffer." : "Noch keine Meldungen."}</p>`}
+    </section>`;
+  }
+
+  // Überblick: eine Kachel je Hauptreiter, Meldungen der Unterbereiche gemischt
+  function overviewTile(sec, q) {
+    const subs = subsOf(sec);
+    const isTender = sec.id === "ausschreibungen";
+    const items = isTender ? filtered(topicById("ausschreibungen"))
+      : subs.flatMap(([id]) => filtered(topicById(id))).sort((a, b) => (b.published || "").localeCompare(a.published || ""));
+    const total = isTender ? topicById("ausschreibungen").items.length : subs.reduce((n, [id]) => n + topicById(id).items.length, 0);
+    const showAll = expanded.has(sec.id);
+    const shown = showAll ? items : items.slice(0, PAGE);
+    const body = !shown.length
+      ? `<p class="empty">${total ? "Keine Treffer." : isTender ? "Gerade keine Ausschreibungen zu ballistischen Helmen." : "Noch keine Meldungen."}</p>`
+      : isTender ? `<ol class="items">${shown.map((it) => tenderRow(it, q).replace('class="tender', 'class="item tender')).join("")}</ol>`
+      : renderGroupedItems(shown, q, subs.length > 1);
+    return `<section class="tile" style="--tc:${sec.color}">
+      <header class="tile-head">
+        <span class="tile-icon">${sec.icon}</span>
+        <h2><button type="button" class="tile-link" data-tab="${sec.id}">${escapeHtml(sec.label)}</button></h2>
+        <span class="count">${items.length === total ? `${items.length} Meldungen` : `${items.length} von ${total}`}</span>
+      </header>
+      ${body}
+      ${!showAll && items.length > PAGE ? `<button class="more" type="button" data-more="${sec.id}">Alle ${items.length} anzeigen</button>` : ""}
+    </section>`;
+  }
+
   function renderGrid() {
     const q = search.value.trim();
+    grid.classList.toggle("single", activeTab !== "alle");
+    // Tabellen dürfen die volle Breite nutzen
+    grid.classList.toggle("wide", activeTab === "ausschreibungen");
     if (activeTab === "termine") {
-      grid.classList.add("single");
       grid.innerHTML = `<section class="tile" style="--tc:var(--t-konkurrenz)">
         <header class="tile-head"><span class="tile-icon">📅</span><h2>Messen und Termine</h2>
           <span class="count">${upcomingFairs().length} Termine</span></header>
@@ -405,34 +616,18 @@
       </section>`;
       return;
     }
-    if (activeTab === "gemerkt" || activeTab === "ausschreibungen") {
-      grid.classList.add("single");
-      const topic = data.topics.find((t) => t.id === "ausschreibungen");
-      grid.innerHTML = activeTab === "gemerkt" ? renderSaved(q) : renderTenderTable(topic, q);
+    if (activeTab === "gemerkt") { grid.innerHTML = renderSaved(q); return; }
+    if (activeTab === "profil") { grid.innerHTML = renderProfile(activeProfile, q); return; }
+    if (activeTab === "alle") {
+      grid.innerHTML = SECTIONS.filter((s) => subsOf(s).length).map((s) => overviewTile(s, q)).join("");
       return;
     }
-    const topics = activeTab === "alle" ? data.topics : data.topics.filter((t) => t.id === activeTab);
-    grid.classList.toggle("single", activeTab !== "alle");
-    grid.innerHTML = topics.map((topic) => {
-      const items = filtered(topic);
-      const showAll = expanded.has(topic.id) || activeTab !== "alle";
-      const shown = showAll ? items : items.slice(0, PAGE);
-      const isTender = topic.id === "ausschreibungen";
-      const body = !shown.length
-        ? `<p class="empty">${topic.items.length ? "Keine Treffer." : isTender ? "Gerade keine Ausschreibungen zu ballistischen Helmen." : "Noch keine Meldungen."}</p>`
-        : isTender ? `<ol class="items">${shown.map((it) => tenderRow(it, q).replace('class="tender', 'class="item tender')).join("")}</ol>`
-        : renderGroupedItems(shown, q);
-      const count = items.length === topic.items.length ? `${items.length} Meldungen` : `${items.length} von ${topic.items.length}`;
-      return `<section class="tile" style="--tc:${meta(topic.id).color}">
-        <header class="tile-head">
-          <span class="tile-icon">${meta(topic.id).icon}</span>
-          <h2>${escapeHtml(topic.name)}</h2>
-          <span class="count">${count}</span>
-        </header>
-        ${body}
-        ${!showAll && items.length > PAGE ? `<button class="more" type="button" data-more="${topic.id}">Alle ${items.length} anzeigen</button>` : ""}
-      </section>`;
-    }).join("");
+    const sec = SECTIONS.find((s) => s.id === activeTab);
+    const topic = topicById(activeSub);
+    const view = activeSub === "ausschreibungen" ? renderTenderTable(topic, q)
+      : activeSub === "zuschlaege" ? renderAwardTable(topic, q)
+      : (activeSub === "konkurrenz" ? profileCards() : "") + topicTile(topic, q);
+    grid.innerHTML = subTabs(sec) + view;
   }
 
   function renderSources() {
@@ -449,11 +644,26 @@
       </tr>`).join("")}</tbody></table></div>`;
   }
 
-  function setTab(id) {
-    activeTab = id;
-    store.set(TAB_KEY, activeTab);
-    history.replaceState(null, "", id === "alle" ? location.pathname + location.search : `#${id}`);
+  // Ansicht wechseln; der Link (#markt/schuberth) bleibt teilbar
+  function setView(tab, sub = null, profile = null) {
+    const sec = SECTIONS.find((s) => s.id === tab);
+    if (sec && data) {
+      const subs = subsOf(sec);
+      if (!subs.length) tab = "alle";
+      else if (!subs.some(([id]) => id === sub)) sub = subs[0][0];
+    } else if (!VIEWS.includes(tab) || (tab === "profil" && !PROFILES.some((p) => p.id === profile))) {
+      tab = "alle";
+    }
+    activeTab = tab;
+    activeSub = sec ? sub : null;
+    activeProfile = tab === "profil" ? profile : null;
+    store.set(TAB_KEY, activeTab === "profil" ? "markt" : activeTab);
+    const hash = activeTab === "alle" ? "" : activeTab === "profil" ? `#profil/${activeProfile}`
+      : sec && subsOf(sec).length > 1 && activeSub !== subsOf(sec)[0][0] ? `#${activeTab}/${activeSub}` : `#${activeTab}`;
+    if (location.hash !== hash) history.replaceState(null, "", hash || location.pathname + location.search);
   }
+  // Sprung zu einer Rubrik (Kennzahl, "neu seit"-Leiste): findet den passenden Reiter
+  const goTopic = (id) => { const sec = sectionOf(id); sec ? setView(sec.id, id) : setView(id); };
 
   function render() { renderTabs(); renderKpis(); renderSince(); renderBriefing(); renderGrid(); }
 
@@ -470,34 +680,35 @@
     document.querySelectorAll(`button[data-save="${CSS.escape(link)}"]`).forEach((b) => { b.outerHTML = starBtn({ link }); });
   }
 
-  tabs.addEventListener("click", (e) => {
-    const b = e.target.closest("button[data-tab]");
-    if (!b) return;
-    setTab(b.dataset.tab);
-    render();
-    window.scrollTo({ top: 0 });
-  });
+  const go = (fn) => { fn(); render(); window.scrollTo({ top: 0 }); };
   document.addEventListener("click", (e) => {
+    const t = e.target.closest("button[data-tab]");
+    if (t) { go(() => setView(t.dataset.tab, store.get(`news:sub:${t.dataset.tab}`))); return; }
+    const sb = e.target.closest("button[data-sub]");
+    if (sb) {
+      store.set(`news:sub:${sectionOf(sb.dataset.sub)?.id}`, sb.dataset.sub);
+      go(() => goTopic(sb.dataset.sub));
+      return;
+    }
     const s = e.target.closest("button[data-save]");
     if (s) { e.preventDefault(); toggleSave(s.dataset.save); return; }
     const c = e.target.closest("button[data-country]");
     if (c) { tenderCountry = c.dataset.country; renderGrid(); return; }
     if (e.target.closest("button[data-export]")) { exportTenders(); return; }
     const k = e.target.closest("button[data-kpi]");
-    if (k) { setTab(k.dataset.kpi); render(); window.scrollTo({ top: 0 }); return; }
+    if (k) { go(() => goTopic(k.dataset.kpi)); return; }
     const n = e.target.closest("button[data-since]");
-    if (n) {
-      setTab(n.dataset.since);
-      onlyNew.checked = true;
-      render();
-      window.scrollTo({ top: 0 });
-      return;
-    }
+    if (n) { onlyNew.checked = true; go(() => goTopic(n.dataset.since)); return; }
     const b = e.target.closest("button[data-more]");
     if (b) { expanded.add(b.dataset.more); renderGrid(); }
   });
+  savedBtn.addEventListener("click", () => go(() => setView(activeTab === "gemerkt" ? "alle" : "gemerkt")));
   const refresh = () => { renderKpis(); renderSince(); renderBriefing(); renderGrid(); };
-  addEventListener("hashchange", () => { activeTab = decodeURIComponent(location.hash.slice(1)) || "alle"; if (data) render(); });
+  addEventListener("hashchange", () => {
+    if (!data) return;
+    const v = parseView(location.hash.slice(1));
+    go(() => setView(v.tab, v.sub, v.profile));
+  });
   search.addEventListener("input", refresh);
   onlyNew.addEventListener("change", refresh);
   deutsch.checked = store.get(LANG_KEY) !== "0";
@@ -511,7 +722,9 @@
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((json) => {
       data = json;
-      if (!["gemerkt", "termine"].includes(activeTab) && !data.topics.some((t) => t.id === activeTab)) activeTab = "alle";
+      // Reiter aus dem Link hat Vorrang, damit man Ansichten teilen kann; sonst der zuletzt besuchte
+      const v = parseView(location.hash.slice(1) || store.get(TAB_KEY) || "alle");
+      setView(v.tab, v.sub || store.get(`news:sub:${v.tab}`), v.profile);
       for (const t of data.topics) for (const it of t.items) byLink.set(it.link, it);
       // Gemerkte Meldungen mit dem aktuellen Stand auffrischen (z. B. neue KI-Zusammenfassung)
       for (const link of Object.keys(saved)) if (byLink.has(link)) saved[link] = { ...byLink.get(link), savedAt: saved[link].savedAt };

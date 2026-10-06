@@ -40,7 +40,8 @@ USER_AGENT = "Mozilla/5.0 (compatible; MeineNewsSite/1.0; +https://github.com)"
 BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 TIMEOUT = 25
 MAX_ITEMS_PER_TOPIC = 80
-MAX_AGE_DAYS = {"ausschreibungen": 365, "konkurrenz": 120, "branche": 30, "technologie": 365}
+MAX_AGE_DAYS = {"ausschreibungen": 365, "zuschlaege": 730, "konkurrenz": 120, "schuberth": 180,
+                "branche": 30, "technologie": 365, "normen": 730}
 DEFAULT_MAX_AGE_DAYS = 14
 
 # Nur Schutzkopfbedeckungen/Helme (18444…), keine Westen oder Schutzkleidung.
@@ -467,12 +468,15 @@ TED_BALLISTIC_FT = (
 
 
 def fetch_ted(topic, source, match=None):
-    since = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS["ausschreibungen"])).strftime("%Y%m%d")
+    # Zuschläge reichen weiter zurück als offene Ausschreibungen
+    since = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS["zuschlaege"])).strftime("%Y%m%d")
     cpv = " ".join(TED_CPV)
     base_fields = ["publication-number", "notice-title", "buyer-name", "buyer-country",
                    "publication-date", "deadline-receipt-tender-date-lot", "notice-type", "classification-cpv"]
     # Los-Titel und -Beschreibung, damit der Ballistik-Filter auch den Text sieht (falls die API die Felder kennt)
-    extra_fields = ["title-lot", "description-lot"]
+    # dazu die Zuschlagsfelder (Gewinner, Bieter, Wert), die nur Zuschlagsbekanntmachungen tragen
+    extra_fields = ["title-lot", "description-lot", "winner-name", "winner-country", "organisation-name-tenderer",
+                    "total-value", "total-value-cur", "contract-conclusion-date"]
 
     def run_query(q):
         fields = base_fields + extra_fields
@@ -503,6 +507,18 @@ def fetch_ted(topic, source, match=None):
         if isinstance(v, list):
             return pick_lang(v[0]) if v else ""
         return str(v or "")
+
+    def all_values(v):
+        """Alle Einträge eines (mehrsprachigen) Feldes, ohne Doppelte, Reihenfolge bleibt."""
+        if isinstance(v, dict):
+            v = next((v[k] for k in ("deu", "eng") if v.get(k)), next(iter(v.values()), []))
+        vals = v if isinstance(v, list) else [v] if v else []
+        out = []
+        for x in vals:
+            x = clean_text(str(x), 120)
+            if x and x.lower() not in {o.lower() for o in out}:
+                out.append(x)
+        return out
 
     def all_text(v):
         if isinstance(v, dict):
@@ -541,14 +557,31 @@ def fetch_ted(topic, source, match=None):
             deadline = to_iso(pick_lang(n.get("deadline-receipt-tender-date-lot")))
             country = pick_lang(n.get("buyer-country"))
             buyer = pick_lang(n.get("buyer-name"))
+            notice_type = str(n.get("notice-type") or "")
+            extra = {"deadline": deadline, "buyer": buyer or None, "country": country or None,
+                     "domain": "ted.europa.eu", "ballistic": is_ballistic or None, "notice_type": notice_type or None}
+            # Zuschlagsbekanntmachungen (can-*, veat) gehören in die Zuschlagsauswertung, nicht zu den offenen Verfahren
+            is_award = notice_type.startswith("can") or notice_type == "veat"
+            if is_award:
+                value = n.get("total-value")
+                value = value[0] if isinstance(value, list) and value else value
+                try:
+                    value = round(float(value)) if value not in (None, "") else None
+                except (TypeError, ValueError):
+                    value = None
+                winners = all_values(n.get("winner-name"))
+                extra.update(deadline=None, winners=winners[:12] or None,
+                             winner_countries=all_values(n.get("winner-country"))[:12] or None,
+                             bidders=[b for b in all_values(n.get("organisation-name-tenderer")) if b not in winners][:20] or None,
+                             value=value, currency=pick_lang(n.get("total-value-cur")) or None,
+                             awarded=to_iso(pick_lang(n.get("contract-conclusion-date"))))
             it = make_item(
-                topic, source["name"], title or f"TED {pub_no}",
+                "zuschlaege" if is_award else topic, source["name"], title or f"TED {pub_no}",
                 f"https://ted.europa.eu/de/notice/-/detail/{pub_no}",
                 to_iso(pick_lang(n.get("publication-date"))),
                 " · ".join(x for x in (buyer, lot_text) if x),
                 publisher="TED",
-                extra={"deadline": deadline, "buyer": buyer or None, "country": country or None,
-                       "domain": "ted.europa.eu", "ballistic": is_ballistic or None},
+                extra=extra,
             )
             if it:
                 items.append(it)
@@ -741,8 +774,10 @@ def main():
         results += gnews_future.result()
     statuses = [r[0] for r in results]
     items = [i for r in results for i in r[1]]
-    # Neue Meldungen zuerst, damit sie beim Entdoppeln Vorrang vor alten Ständen haben
-    items += previous
+    # Neue Meldungen zuerst, damit sie beim Entdoppeln Vorrang vor alten Ständen haben.
+    # Alte Stände, die inzwischen in einer anderen Rubrik landen (z. B. Zuschläge), nicht doppelt behalten.
+    fresh_topic = {i["link"]: i["topic"] for i in items}
+    items += [i for i in previous if fresh_topic.get(i["link"], i["topic"]) == i["topic"]]
     # Mehr Kandidaten behalten, weil die KI-Bewertung noch irrelevante Meldungen aussortiert
     topics = finalize(cfg, items, limit=MAX_ITEMS_PER_TOPIC * 2)
     ai_cache, ai_msg = ai_rate.rate(topics, ai_cache)
