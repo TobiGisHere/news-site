@@ -135,10 +135,18 @@ class _KeepPost(urllib.request.HTTPRedirectHandler):
 _github_opener = urllib.request.build_opener(_KeepPost)
 
 
-def _call_github(batch, token):
-    """GitHub Models: kostenlos mit dem GITHUB_TOKEN des Workflows (Tageslimit, daher sparsam)."""
+# Zugangswege zu GitHub Models; der erste, der echtes JSON liefert, wird für den Rest des Laufs behalten
+GITHUB_ENDPOINTS = [
+    ("https://models.github.ai/inference/chat/completions", GITHUB_MODEL, True),
+    ("https://models.github.ai/inference/chat/completions", GITHUB_MODEL, False),
+    ("https://models.inference.ai.azure.com/chat/completions", GITHUB_MODEL.split("/")[-1], False),
+]
+_working = []
+
+
+def _github_request(url, model, gh_headers, batch, token):
     body = json.dumps({
-        "model": GITHUB_MODEL,
+        "model": model,
         "temperature": 0.2,
         "max_tokens": 4000,
         "response_format": {"type": "json_object"},
@@ -149,12 +157,12 @@ def _call_github(batch, token):
             {"role": "user", "content": "Bewerte diese Meldungen (eine JSON-Zeile je Meldung):\n" + _lines(batch)},
         ],
     }).encode()
-    req = urllib.request.Request(GITHUB_URL, data=body, headers={
-        "Authorization": f"Bearer {token}", "Content-Type": "application/json",
-        "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    if gh_headers:
+        headers.update({"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     with _github_opener.open(req, timeout=120) as r:
         raw = r.read().decode("utf-8", "replace")
-        final_url = r.geturl()
     try:
         data = json.loads(raw)
         content = data["choices"][0]["message"]["content"] or ""
@@ -162,7 +170,24 @@ def _call_github(batch, token):
         start, end = content.find("{"), content.rfind("}")
         return _parse(json.loads(content[start:end + 1]).get("results"), batch)
     except (ValueError, KeyError, IndexError, TypeError) as e:
-        raise ValueError(f"{e.__class__.__name__}; {final_url}; Antwort: {raw[:200]!r}") from None
+        raise ValueError(f"{e.__class__.__name__} bei {url} ({model}): {raw[:160]!r}") from None
+
+
+def _call_github(batch, token):
+    """GitHub Models: kostenlos mit dem GITHUB_TOKEN des Workflows (Tageslimit, daher sparsam)."""
+    if _working:
+        return _github_request(*_working[0], batch, token)
+    problems = []
+    for ep in GITHUB_ENDPOINTS:
+        try:
+            res = _github_request(*ep, batch, token)
+            _working.append(ep)
+            return res
+        except urllib.error.HTTPError as e:
+            problems.append(f"HTTP {e.code} bei {ep[0]} ({ep[1]}): {e.read().decode('utf-8', 'replace')[:160]}")
+        except Exception as e:  # noqa: BLE001
+            problems.append(str(e)[:220])
+    raise RuntimeError(" | ".join(problems))
 
 
 def rate(topics, cache):
@@ -212,7 +237,9 @@ def rate(topics, cache):
                 if e.code in (401, 403, 429):  # Limit erreicht oder kein Zugriff: im nächsten Lauf weiter
                     break
             except Exception as e:  # noqa: BLE001
-                errors.append(f"{e.__class__.__name__}: {str(e)[:200]}")
+                errors.append(f"{e.__class__.__name__}: {str(e)[:700]}")
+                if not _working:  # kein Zugangsweg funktioniert: Limit nicht weiter verbrauchen
+                    break
     rated = sum(1 for it in todo if it["link"] in cache and not needs(it))
 
     dropped = 0
@@ -232,6 +259,8 @@ def rate(topics, cache):
     cache = {k: v for k, v in cache.items() if k in current}
     msg = f"{provider}: {rated} neu bewertet, {len(todo) - rated} offen, {dropped} ausgeblendet"
     if errors:
-        msg += f", {len(errors)} Fehler: {errors[0]}"
+        msg += f", {len(errors)} Fehler: {errors[0][:900]}"
+    if _working:
+        msg += f" (Zugang: {_working[0][0]}, {_working[0][1]})"
         print("KI-Fehler: " + " | ".join(errors), file=sys.stderr)
     return cache, msg
