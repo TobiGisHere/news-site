@@ -39,7 +39,8 @@ jobs:
         run: python scripts/fetch_news.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # optional, sonst GitHub Models
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}         # kostenlos über Google AI Studio
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # optional, kostenpflichtig
       - name: Mails (Sofortalarm, Wochen-Digest)
         run: python scripts/notify.py ${{ inputs.test_mail && '--digest' || '' }}
         continue-on-error: true

@@ -4,8 +4,8 @@ Jede neue Meldung bekommt eine Relevanz von 0 bis 10 für den Markt ballistische
 eine deutsche Kurzfassung und eine Begründung. Bereits bewertete Links kommen aus dem Cache,
 damit pro Lauf nur neue Meldungen bewertet werden.
 
-Standard ist GitHub Models (kostenlos über den GITHUB_TOKEN des Workflows, Tageslimit).
-Ist ein ANTHROPIC_API_KEY hinterlegt, wird stattdessen Claude genutzt. Ohne beides passiert nichts.
+Reihenfolge: ANTHROPIC_API_KEY (Claude, kostenpflichtig), GEMINI_API_KEY (Google, kostenloses Kontingent),
+sonst GitHub Models über den GITHUB_TOKEN des Workflows. Ohne Zugang passiert nichts.
 """
 
 import json
@@ -25,6 +25,10 @@ MAX_NEW_PER_RUN = 300
 # GitHub Models erlaubt nur wenige Anfragen pro Tag und Minute: pro Lauf begrenzen, Rest folgt im nächsten Lauf
 GITHUB_MAX_BATCHES = 8
 GITHUB_PAUSE = 5
+# Google Gemini: kostenloser Schlüssel aus Google AI Studio, OpenAI-kompatible Schnittstelle
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+GEMINI_MAX_BATCHES = 20
 # Meldungen unter dieser Relevanz werden ausgeblendet (Ausschreibungen etwas großzügiger)
 MIN_SCORE = {"ausschreibungen": 3, "zuschlaege": 3, "schuberth": 3}
 DEFAULT_MIN_SCORE = 4
@@ -144,11 +148,11 @@ GITHUB_ENDPOINTS = [
 _working = []
 
 
-def _github_request(url, model, gh_headers, batch, token):
+def _github_request(url, model, gh_headers, batch, token, max_tokens=4000):
     body = json.dumps({
         "model": model,
         "temperature": 0.2,
-        "max_tokens": 4000,
+        "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": SYSTEM + "\n\nAntworte ausschließlich mit JSON der Form "
@@ -193,9 +197,10 @@ def _call_github(batch, token):
 def rate(topics, cache):
     """Bewertet neue Meldungen, blendet irrelevante aus und gibt den neuen Cache zurück."""
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    gemini_key = os.environ.get("GEMINI_API_KEY")
     github_token = os.environ.get("GITHUB_TOKEN")
     all_items = [it for t in topics for it in t["items"]]
-    if not anthropic_key and not github_token:
+    if not anthropic_key and not gemini_key and not github_token:
         # Ohne Zugang vorhandene Bewertungen weiter anzeigen, aber nichts ausblenden
         for it in all_items:
             if it["link"] in cache:
@@ -224,13 +229,19 @@ def rate(topics, cache):
             for res in pool.map(run, batches):
                 cache.update(res)
     else:
-        provider = "GitHub Models"
-        batches = batches[:GITHUB_MAX_BATCHES]
+        if gemini_key:
+            provider, limit = "Gemini", GEMINI_MAX_BATCHES
+            call = lambda b: _github_request(GEMINI_URL, GEMINI_MODEL, False, b, gemini_key, 8000)  # noqa: E731
+            _working.append((GEMINI_URL, GEMINI_MODEL, False))
+        else:
+            provider, limit = "GitHub Models", GITHUB_MAX_BATCHES
+            call = lambda b: _call_github(b, github_token)  # noqa: E731
+        batches = batches[:limit]
         for n, b in enumerate(batches):
             if n:
                 time.sleep(GITHUB_PAUSE)
             try:
-                cache.update(_call_github(b, github_token))
+                cache.update(call(b))
             except urllib.error.HTTPError as e:
                 detail = e.read().decode("utf-8", "replace")[:200]
                 errors.append(f"HTTP {e.code}: {detail}")
@@ -260,7 +271,7 @@ def rate(topics, cache):
     msg = f"{provider}: {rated} neu bewertet, {len(todo) - rated} offen, {dropped} ausgeblendet"
     if errors:
         msg += f", {len(errors)} Fehler: {errors[0][:900]}"
-    if _working:
-        msg += f" (Zugang: {_working[0][0]}, {_working[0][1]})"
         print("KI-Fehler: " + " | ".join(errors), file=sys.stderr)
+    if _working:
+        msg += f" (Zugang: {_working[0][1]})"
     return cache, msg
