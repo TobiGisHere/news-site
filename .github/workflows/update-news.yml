@@ -2,8 +2,15 @@ name: News aktualisieren
 
 on:
   schedule:
-    - cron: "17 4-21/2 * * *"   # alle 2 Stunden zwischen ca. 6 und 23 Uhr deutscher Zeit
+    # Stündlich zwischen ca. 6 und 23 Uhr deutscher Zeit. GitHub startet geplante Läufe nur nach Kapazität
+    # und lässt bei neuen Repositories viele ausfallen; öfter planen gleicht das teilweise aus.
+    - cron: "17 4-21 * * *"
   workflow_dispatch:            # manuell über "Run workflow"
+    inputs:
+      test_mail:
+        description: "Wochen-Digest sofort als Test verschicken"
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -31,6 +38,12 @@ jobs:
         run: python scripts/fetch_news.py
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: Mails (Sofortalarm, Wochen-Digest)
+        run: python scripts/notify.py ${{ inputs.test_mail && '--digest' || '' }}
+        continue-on-error: true
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
