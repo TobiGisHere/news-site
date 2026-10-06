@@ -33,7 +33,6 @@
         <label class="toggle" title="Titel und Zusammenfassungen auf Deutsch anzeigen"><input type="checkbox" id="deutsch" checked> 🇩🇪 Deutsch</label>
         <label class="toggle"><input type="checkbox" id="only-new"> nur neue</label>
         <button type="button" class="saved-btn" id="saved-btn" aria-pressed="false" title="Gemerkte Meldungen anzeigen">☆ Merkliste</button>
-        <button type="button" class="saved-btn" id="feedback-btn" title="Verbesserungsvorschlag an Tobi schicken" hidden>💬<span class="fb-label"> Feedback</span></button>
       </div>
     </div>
     <nav class="wrap tabs" id="tabs"></nav>
@@ -52,7 +51,7 @@
         <p><b>Wie aktuell?</b> Die Seite aktualisiert sich tagsüber etwa stündlich (6 bis 23 Uhr). Die Uhrzeit des letzten Stands steht oben unter dem Namen.</p>
         <p><b>Wie wird gefiltert?</b> Jede Quelle läuft durch Stichwortfilter (z. B. Ausschreibungen nur mit Helm- und Ballistikbegriffen). Eine KI-Bewertung mit Übersetzung ist vorbereitet und kann später zugeschaltet werden.</p>
         <p><b>Tipps:</b> ☆ merkt eine Meldung in deiner Merkliste (nur in deinem Browser). „nur neue“ zeigt, was seit deinem letzten Besuch dazugekommen ist. Jeder Reiter hat einen eigenen Link zum Teilen, z. B. <code>#ausschreibungen</code>. Die Ausschreibungen lassen sich als Excel-Datei herunterladen. Auf dem Handy kannst du die Seite über „Zum Home-Bildschirm“ wie eine App ablegen.</p>
-        <p><b>Fehlt etwas?</b> Quellenwünsche, falsche Treffer und Ideen bitte an Tobi<span data-fb-hint hidden>, am einfachsten über <a href="#" data-feedback>💬 Feedback</a> oben</span>.</p>
+        <p><b>Fehlt etwas?</b> Quellenwünsche, falsche Treffer und Ideen bitte an Tobi<span data-fb-hint hidden>, am einfachsten über <a href="#" data-feedback>💬 Feedback</a> unten rechts</span>.</p>
       </div>
     </details>
     <details class="sources" id="sources">
@@ -61,6 +60,7 @@
     </details>
   </main>
 
+  <button type="button" class="fb-fab" id="feedback-btn" title="Verbesserungsvorschlag an Tobi schicken" hidden>💬<span class="fb-label"> Feedback</span></button>
   <dialog class="feedback" id="feedback" aria-labelledby="fb-title">
     <form>
       <div class="fb-head"><h2 id="fb-title">💬 Feedback an Tobi</h2><button type="button" class="fb-close" aria-label="Schließen">×</button></div>
