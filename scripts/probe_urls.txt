@@ -1,1 +1,8 @@
-live https://tobigishere.github.io/news-site/data/news.json
+pl https://ezamowienia.gov.pl/mo-board/api/v1/Board/Search?NoticeType=ContractNotice&OrderObject=balistyczn&PublicationDateFrom=2026-06-01&SortingColumnName=PublicationDate&SortingDirection=DESC&PageNumber=1&PageSize=50
+pl2 https://ezamowienia.gov.pl/mo-board/api/v1/Board/Search?NoticeType=ContractNotice&OrderObject=hełmów&PublicationDateFrom=2026-06-01&SortingColumnName=PublicationDate&SortingDirection=DESC&PageNumber=1&PageSize=50
+boamp https://boamp-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/boamp/records?where=search(objet%2C%22casque%22)%20AND%20dateparution%3E%3Ddate%272026-06-01%27&order_by=dateparution%20desc&limit=50
+cf POST https://www.contractsfinder.service.gov.uk/api/rest/2/search_notices/json {"searchCriteria":{"keyword":"helmet","publishedFrom":"2026-06-01T00:00:00","types":["Contract"]},"size":50}
+nspa https://eportal.nspa.nato.int/eProcurement/XML/eProcurementData.xml
+ca https://canadabuys.canada.ca/opendata/pub/openTenderNotice-ouvertAvisAppelOffres.csv
+ee https://riigihanked.riik.ee/rhr/api/public/v1/rss
+lv https://open.iub.gov.lv/data/notice/2026/10/05-10-2026.json
