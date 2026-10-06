@@ -47,6 +47,10 @@ jobs:
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
+      - name: Feedback-Formular freischalten
+        run: '[ -z "$WEB3FORMS_KEY" ] || echo "window.FEEDBACK_KEY = \"$WEB3FORMS_KEY\";" > site/feedback-config.js'
+        env:
+          WEB3FORMS_KEY: ${{ secrets.WEB3FORMS_KEY }}   # kostenlos über web3forms.com, Mails gehen an die dort hinterlegte Adresse
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
