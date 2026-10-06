@@ -330,3 +330,11 @@ a.co-rival:hover { background: color-mix(in srgb, var(--t-konkurrenz) 10%, var(-
 .back { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 999px;
   width: 30px; height: 30px; font: inherit; cursor: pointer; flex: none; }
 .grid.single.wide { max-width: none; }
+/* Überblick: vier Bereiche gleichmäßig verteilen (2 × 2, auf sehr breiten Bildschirmen 4 nebeneinander) */
+@media (min-width: 900px) {
+  .grid:not(.single) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .leads { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+}
+@media (min-width: 1700px) {
+  .grid:not(.single) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
