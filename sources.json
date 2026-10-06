@@ -187,6 +187,77 @@
       ]
     },
     {
+      "id": "zuschlaege",
+      "name": "Zuschläge: Wer hat gewonnen?",
+      "short": "Zuschläge",
+      "priority": 1,
+      "note": "Zuschlagsbekanntmachungen aus TED (Gewinner, Bieter, Auftragswert). Wird beim TED-Abruf der Ausschreibungen mit befüllt, keine eigenen Quellen.",
+      "sources": [],
+      "require_keywords": [
+        "helm",
+        "kopfbedeckung",
+        "kask",
+        "casque",
+        "casco",
+        "κράνη",
+        "κράνος",
+        "kypär",
+        "hjelm",
+        "hjälm",
+        "sisak",
+        "čelad",
+        "prilba"
+      ],
+      "exclude_keywords": [
+        "wilhelm",
+        "helmut",
+        "helmstedt",
+        "overwhelm",
+        "helmholtz",
+        "to helm",
+        "at the helm",
+        "the helm of",
+        "helm the",
+        "helms the"
+      ],
+      "require_also_keywords": [
+        "ballist",
+        "balist",
+        "kugelsicher",
+        "beschusshemm",
+        "durchschusshemm",
+        "VPAM",
+        "HVN 2009",
+        "bulletproof",
+        "pare-balles",
+        "pare-balle",
+        "antibala",
+        "anti-bala",
+        "kogelwerend",
+        "kuloodporn",
+        "neprůstřel",
+        "neprestrel",
+        "Gefechtshelm",
+        "Kampfhelm",
+        "combat helmet",
+        "Titanhelm",
+        "STANAG",
+        "bullet-proof",
+        "bullet resistant",
+        "bullet-resistant",
+        "splitterschutz",
+        "balíst",
+        "βαλλιστ",
+        "балист",
+        "intervention",
+        "spezialeinheit",
+        "gefecht",
+        "combat",
+        "military helmet",
+        "Militärhelm"
+      ]
+    },
+    {
       "id": "konkurrenz",
       "name": "Wettbewerber ballistische Helme",
       "priority": 1,
@@ -216,12 +287,6 @@
           "gnews_query": "\"Mehler Protection\" OR \"Mehler Systems\"",
           "link_pattern": "mehler-systems\\.com/(company|product)-news/[^/]+/?$",
           "title_strip": "^(company|product) news|learn more"
-        },
-        {
-          "name": "Schuberth",
-          "type": "gnews",
-          "gnews_query": "Schuberth Helm Polizei OR Militär",
-          "verified": false
         },
         {
           "name": "Galvion (ehem. Revision)",
@@ -318,6 +383,30 @@
       ]
     },
     {
+      "id": "schuberth",
+      "name": "Schuberth-News",
+      "short": "Schuberth",
+      "priority": 1,
+      "note": "Eigene Meldungen über Schuberth (Behörden, Polizei, Militär). Motorradhelm-Themen bewertet die KI niedrig.",
+      "sources": [
+        {
+          "name": "Google News: Schuberth Behörden und Militär",
+          "type": "gnews",
+          "query": "Schuberth (Polizei OR Bundeswehr OR Militär OR Behörden OR ballistisch OR Schutzhelm OR Gefechtshelm)",
+          "verified": false
+        },
+        {
+          "name": "Google News: Schuberth defence",
+          "type": "gnews",
+          "query": "Schuberth (military OR defence OR defense OR police OR ballistic OR \"combat helmet\")",
+          "verified": false
+        }
+      ],
+      "reject_keywords": [
+        "motogp"
+      ]
+    },
+    {
       "id": "branche",
       "name": "Branche, Berichte & Behörden",
       "priority": 2,
@@ -364,19 +453,6 @@
           "name": "Defense News",
           "type": "rss",
           "url": "https://www.defensenews.com/arc/outboundfeeds/rss/",
-          "verified": false
-        },
-        {
-          "name": "VPAM (Prüfrichtlinien, Neuigkeiten)",
-          "type": "scrape",
-          "url": "https://www.vpam.eu",
-          "verified": true,
-          "link_pattern": "vpam\\.eu/(?!pruefrichtlinien|datenschutz|impressum|kontakt)[a-z0-9-]{12,}/?$"
-        },
-        {
-          "name": "Google News: VPAM / Schutzklasse",
-          "type": "gnews",
-          "query": "VPAM OR \"Schutzklasse\" Helm OR Weste",
           "verified": false
         },
         {
@@ -556,6 +632,71 @@
         "hospital",
         "civil engineering",
         "gang "
+      ]
+    },
+    {
+      "id": "normen",
+      "name": "Normen-Radar: Prüfrichtlinien und Standards",
+      "short": "Normen",
+      "priority": 2,
+      "note": "Änderungen an Prüfnormen für ballistischen Schutz: VPAM HVN 2009, NIJ 0106/0123, EN 14458, STANAG 2920 / AEP-2920, TR der Polizei.",
+      "require_keywords": [
+        "VPAM",
+        "HVN",
+        "NIJ",
+        "STANAG",
+        "AEP-2920",
+        "AEP 2920",
+        "EN 14458",
+        "14458",
+        "Prüfrichtlinie",
+        "Technische Richtlinie",
+        "standard",
+        "norm",
+        "certif",
+        "zertifi",
+        "test protocol",
+        "Prüfverfahren",
+        "Schutzklasse"
+      ],
+      "sources": [
+        {
+          "name": "VPAM (Prüfrichtlinien, Neuigkeiten)",
+          "type": "scrape",
+          "url": "https://www.vpam.eu",
+          "verified": true,
+          "link_pattern": "vpam\\.eu/(?!pruefrichtlinien|datenschutz|impressum|kontakt)[a-z0-9-]{12,}/?$"
+        },
+        {
+          "name": "Google News: VPAM / Schutzklasse",
+          "type": "gnews",
+          "query": "VPAM OR \"Schutzklasse\" Helm OR Weste",
+          "verified": false
+        },
+        {
+          "name": "Google News: NIJ Standard Helme und Schutzwesten",
+          "type": "gnews",
+          "query": "\"NIJ Standard\" (helmet OR \"head protection\" OR \"body armor\" OR 0106 OR 0123)",
+          "verified": false
+        },
+        {
+          "name": "Google News: STANAG 2920 / AEP-2920",
+          "type": "gnews",
+          "query": "\"STANAG 2920\" OR \"AEP-2920\" OR \"STANAG 4569\" helmet",
+          "verified": false
+        },
+        {
+          "name": "Google News: Prüfrichtlinie ballistischer Schutz",
+          "type": "gnews",
+          "query": "(VPAM OR \"Technische Richtlinie\" OR Prüfrichtlinie) (Helm OR Schutzweste OR ballistisch)",
+          "verified": false
+        },
+        {
+          "name": "Google News: ballistic helmet standard",
+          "type": "gnews",
+          "query": "\"ballistic helmet\" (standard OR certification OR \"test protocol\")",
+          "verified": false
+        }
       ]
     },
     {

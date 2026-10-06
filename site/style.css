@@ -16,6 +16,7 @@
   --t-branche: #0f766e;
   --t-technologie: #2563eb;
   --t-weltpolitik: #475569;
+  --t-schuberth: #15803d;
   --star: #d97706;
 }
 @media (prefers-color-scheme: dark) {
@@ -35,6 +36,7 @@
     --t-branche: #2dd4bf;
     --t-technologie: #60a5fa;
     --t-weltpolitik: #94a3b8;
+    --t-schuberth: #4ade80;
     --star: #fbbf24;
   }
 }
@@ -279,3 +281,51 @@ table.tenders { width: 100%; border-collapse: collapse; }
   .country-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .country-chips button { flex: none; }
 }
+
+/* Merkliste-Knopf im Kopf */
+.saved-btn { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px;
+  padding: 4px 11px; font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.saved-btn b { color: var(--star); }
+.saved-btn[aria-pressed="true"] { border-color: var(--star); color: var(--text); }
+
+/* Unterbereiche eines Reiters */
+.subtabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-bottom: 12px; }
+.subtabs button { flex: none; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); border-radius: 10px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.subtabs button b { color: var(--muted); font-weight: 600; }
+.subtabs button .badge { font-size: 12px; font-weight: 650; color: var(--new); }
+.subtabs button[aria-pressed="true"] { border-color: var(--tc); box-shadow: inset 0 -3px 0 var(--tc); font-weight: 600; }
+.tile-note { margin: -4px 16px 8px; color: var(--muted); font-size: 13px; }
+.tile-link { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.tile-link:hover { color: var(--tc); }
+
+/* Zuschläge */
+.ranking { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; padding: 2px 16px 12px; font-size: 13.5px; }
+.ranking-label { font-weight: 600; margin-right: 4px; }
+.ranking b { color: var(--muted); font-weight: 600; margin-right: 10px; }
+.co { display: inline-block; margin: 0 4px 4px 0; padding: 1px 8px; border-radius: 6px; background: var(--surface-2);
+  border: 1px solid var(--line); font-size: 13px; }
+.co-own { background: color-mix(in srgb, var(--t-schuberth) 14%, var(--surface)); border-color: var(--t-schuberth); font-weight: 600; }
+a.co-rival { border-color: var(--t-konkurrenz); color: var(--t-konkurrenz); font-weight: 600; }
+a.co-rival:hover { background: color-mix(in srgb, var(--t-konkurrenz) 10%, var(--surface)); }
+.t-win { min-width: 180px; }
+.t-val { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+.bidders summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 2px 0 4px; }
+@media (max-width: 700px) {
+  .awards tr { grid-template-columns: 44px minmax(0, 1fr); }
+  .awards .t-win, .awards .t-val, .awards .t-pub { grid-column: 2; }
+}
+
+/* Wettbewerberprofile */
+.profiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); margin-bottom: 12px; }
+.profile-card { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.profile-card:hover { border-color: var(--t-konkurrenz); }
+.profile-name { font-weight: 650; font-size: 16px; }
+.profile-stats { color: var(--muted); font-size: 13px; }
+.profile-stats b { color: var(--text); }
+.profile-go { color: var(--t-konkurrenz); font-size: 13px; font-weight: 600; margin-top: 4px; }
+.profile-kpis { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 0 16px 6px; color: var(--muted); font-size: 14px; }
+.profile-kpis b { color: var(--t-konkurrenz); font-size: 18px; margin-right: 3px; }
+.back { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 999px;
+  width: 30px; height: 30px; font: inherit; cursor: pointer; flex: none; }

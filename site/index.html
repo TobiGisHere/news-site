@@ -7,7 +7,7 @@
   <title>Helm-Radar</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c2410c'/%3E%3Cpath d='M6 21c0-6.6 4.5-11 10-11s10 4.4 10 10v1z' fill='%23fff'/%3E%3Crect x='4.5' y='21' width='23' height='3' rx='1.5' fill='%23fff'/%3E%3Cpath d='M20 6.5a8 8 0 0 1 6 4M21.5 3.5a11 11 0 0 1 7.5 5.5' stroke='%23fff' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
   <meta name="theme-color" content="#c2410c">
-  <meta name="description" content="Helm-Radar: Ausschreibungen, Wettbewerber, Technik und Geopolitik rund um ballistische Schutzhelme.">
+  <meta name="description" content="Helm-Radar: Ausschreibungen, Zuschläge, Wettbewerber, Technik, Normen und Geopolitik rund um ballistische Schutzhelme.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="apple-mobile-web-app-title" content="Helm-Radar">
@@ -32,6 +32,7 @@
         <input id="search" type="search" placeholder="Suchen (z. B. VPAM, Helm, NATO)" autocomplete="off">
         <label class="toggle" title="Titel und Zusammenfassungen auf Deutsch anzeigen"><input type="checkbox" id="deutsch" checked> 🇩🇪 Deutsch</label>
         <label class="toggle"><input type="checkbox" id="only-new"> nur neue</label>
+        <button type="button" class="saved-btn" id="saved-btn" aria-pressed="false" title="Gemerkte Meldungen anzeigen">☆ Merkliste</button>
       </div>
     </div>
     <nav class="wrap tabs" id="tabs"></nav>
@@ -45,7 +46,8 @@
     <details class="sources about" id="about">
       <summary>Über Helm-Radar</summary>
       <div class="about-body">
-        <p><b>Was ist das?</b> Helm-Radar sammelt automatisch alles, was für ballistische Schutzhelme zählt: Ausschreibungen aus der EU (TED), Deutschland, der Schweiz und Großbritannien, Neuigkeiten der Wettbewerber und der Branche, neue Forschung zu Ballistik und Helmtechnik sowie Geopolitik mit Folgen für die Beschaffung.</p>
+        <p><b>Was ist das?</b> Helm-Radar sammelt automatisch alles, was für ballistische Schutzhelme zählt: Ausschreibungen aus der EU (TED), Deutschland, der Schweiz und Großbritannien, Zuschläge (wer hat gewonnen, wer hat mitgeboten), Neuigkeiten von Schuberth, den Wettbewerbern und der Branche, neue Forschung zu Ballistik und Helmtechnik, Änderungen an Prüfnormen sowie Geopolitik mit Folgen für die Beschaffung.</p>
+        <p><b>Wie finde ich mich zurecht?</b> Oben stehen sechs Reiter. Unter „Ausschreibungen“, „Markt“ und „Technik &amp; Normen“ wählst du den Unterbereich, z. B. Zuschläge, Schuberth oder Normen. Busch, Mehler und Galvion haben unter „Markt → Wettbewerber“ eine eigene Profilseite mit Meldungen und gewonnenen Zuschlägen.</p>
         <p><b>Wie aktuell?</b> Die Seite aktualisiert sich alle zwei Stunden zwischen 6 und 23 Uhr. Die Uhrzeit des letzten Stands steht oben unter dem Namen.</p>
         <p><b>Wie wird gefiltert?</b> Jede Quelle läuft durch Stichwortfilter (z. B. Ausschreibungen nur mit Helm- und Ballistikbegriffen). Zusätzlich bewertet eine KI jede Meldung nach Relevanz, blendet Unpassendes aus, markiert Wichtiges mit 🔥 und schreibt eine deutsche Kurzfassung.</p>
         <p><b>Tipps:</b> ☆ merkt eine Meldung in deiner Merkliste (nur in deinem Browser). „nur neue“ zeigt, was seit deinem letzten Besuch dazugekommen ist. Jeder Reiter hat einen eigenen Link zum Teilen, z. B. <code>#ausschreibungen</code>. Die Ausschreibungen lassen sich als Excel-Datei herunterladen. Auf dem Handy kannst du die Seite über „Zum Home-Bildschirm“ wie eine App ablegen.</p>

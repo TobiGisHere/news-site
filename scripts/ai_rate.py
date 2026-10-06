@@ -16,7 +16,7 @@ MODEL = os.environ.get("AI_MODEL", "claude-haiku-4-5")
 BATCH = 20
 MAX_NEW_PER_RUN = 300
 # Meldungen unter dieser Relevanz werden ausgeblendet (Ausschreibungen etwas großzügiger)
-MIN_SCORE = {"ausschreibungen": 3}
+MIN_SCORE = {"ausschreibungen": 3, "zuschlaege": 3, "schuberth": 3}
 DEFAULT_MIN_SCORE = 4
 
 SYSTEM = """Du bewertest Meldungen für eine persönliche Marktbeobachtung rund um ballistische Schutzhelme \
@@ -25,7 +25,14 @@ SYSTEM = """Du bewertest Meldungen für eine persönliche Marktbeobachtung rund 
 Relevanz 0 bis 10 je Rubrik:
 - ausschreibungen: 9-10 = Beschaffung ballistischer Helme/Gefechtshelme/Polizei-Schutzhelme (auch als Los); \
 5-7 = Schutzausrüstung, bei der Helme wahrscheinlich dazugehören; 0-2 = nur Westen/Platten, Feuerwehr-, Bau-, Fahrrad-, Reithelme oder kein Bezug.
-- konkurrenz: Neuigkeiten von Helmherstellern (Ulbrichts, Mehler/Busch, Galvion, Gentex/Ops-Core, Team Wendy, Revision, MSA u. a.). \
+- zuschlaege: Zuschlagsbekanntmachungen (wer hat gewonnen). 9-10 = Zuschlag für ballistische Helme/Gefechtshelme/Polizei-Schutzhelme; \
+5-7 = Schutzausrüstung mit wahrscheinlichem Helmanteil; 0-2 = ohne Helmbezug.
+- schuberth: Meldungen über Schuberth, den eigenen Arbeitgeber des Lesers. Hoch = Behörden-, Polizei- und Militärhelme, Aufträge, \
+Unternehmensnachrichten, Standort, Personal; niedrig = reine Motorradhelm-Tests und Motorsport.
+- normen: Prüfnormen und Standards für ballistischen Schutz (VPAM, HVN 2009, NIJ 0106/0123, EN 14458, STANAG 2920/AEP-2920, \
+Technische Richtlinien der Polizei). Hoch = neue oder geänderte Norm, Entwurf, Zertifizierung, Prüfverfahren für Helme; \
+mittel = Normen für Schutzwesten; niedrig = Normen ohne ballistischen Bezug.
+- konkurrenz: Neuigkeiten von Helmherstellern (Ulbrichts, Mehler, Busch, Galvion, Gentex/Ops-Core, Team Wendy, Revision, MSA u. a.). \
 Hoch = Helme, Helmaufträge, neue Helmprodukte, Übernahmen; niedrig = Themen ohne Helmbezug.
 - branche: Branche ballistischer Schutz. Hoch = Helme, Normen (VPAM, NIJ, STANAG), Aufträge, Messen; niedrig = allgemeine Wirtschaft.
 - technologie: Hoch = Forschung/Technik zu ballistischem Schutz, Helmmaterialien (UHMWPE, Aramid, Verbundwerkstoffe), \
@@ -35,7 +42,7 @@ Behind-Armor Blunt Trauma, Blast/Schädel-Hirn-Trauma durch Beschuss, Helmprüfu
 Lieferketten/Logistik, Exportregeln; niedrig = Innenpolitik und Allgemeines.
 
 Für jede Meldung: score (ganze Zahl), title_de (Titel auf Deutsch übersetzt; ist er schon deutsch, unverändert übernehmen; Eigennamen, Produktnamen und Normen nicht übersetzen), summary (1-2 sachliche Sätze auf Deutsch, was drinsteht und warum es zählt; \
-keine Floskeln, nichts erfinden), why (max. 8 Wörter Begründung), facts (nur bei Ausschreibungen: Menge, Wert oder Helmtyp, \
+keine Floskeln, nichts erfinden), why (max. 8 Wörter Begründung), facts (nur bei Ausschreibungen und Zuschlägen: Menge, Wert oder Helmtyp, \
 falls genannt, sonst leer)."""
 
 TOOL = {
@@ -70,7 +77,7 @@ def _call(batch, key):
     for n, it in enumerate(batch):
         lines.append(json.dumps({
             "id": n, "rubrik": it["topic"], "titel": it["title"], "quelle": it.get("source"),
-            "auftraggeber": it.get("buyer"), "text": (it.get("summary") or "")[:700],
+            "auftraggeber": it.get("buyer"), "gewinner": it.get("winners"), "text": (it.get("summary") or "")[:700],
         }, ensure_ascii=False))
     body = json.dumps({
         "model": MODEL,
