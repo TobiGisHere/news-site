@@ -52,10 +52,17 @@ TED_FULLTEXT = ['"ballistic helmet"', '"ballistischer Schutzhelm"', "Schutzhelm"
 
 # ---------------------------------------------------------------- HTTP
 
-def http_get(url, data=None, headers=None):
+def http_get(url, data=None, headers=None, retries=1):
     req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT, **(headers or {})})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        return resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as e:
+        # Kurzzeitige Überlast (zu viele Anfragen, Wartung): einmal nach kurzer Pause wiederholen
+        if retries and e.code in (429, 502, 503, 504):
+            time.sleep(10)
+            return http_get(url, data, headers, retries - 1)
+        raise
 
 
 def http_post_json(url, payload):
