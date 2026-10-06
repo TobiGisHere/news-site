@@ -200,6 +200,9 @@ def rate(topics, cache):
     gemini_key = os.environ.get("GEMINI_API_KEY")
     github_token = os.environ.get("GITHUB_TOKEN")
     all_items = [it for t in topics for it in t["items"]]
+    # GitHub Models antwortet von den Runnern derzeit nur mit "OK"; nur auf ausdrücklichen Wunsch probieren
+    if not os.environ.get("USE_GITHUB_MODELS"):
+        github_token = None
     if not anthropic_key and not gemini_key and not github_token:
         # Ohne Zugang vorhandene Bewertungen weiter anzeigen, aber nichts ausblenden
         for it in all_items:

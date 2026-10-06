@@ -726,6 +726,8 @@
       const v = parseView(location.hash.slice(1) || store.get(TAB_KEY) || "alle");
       setView(v.tab, v.sub || store.get(`news:sub:${v.tab}`), v.profile);
       for (const t of data.topics) for (const it of t.items) byLink.set(it.link, it);
+      // Übersetzen geht nur mit KI-Bewertung; ohne übersetzte Titel den Schalter ausblenden
+      if (!data.topics.some((t) => t.items.some((i) => i.ai?.title_de))) deutsch.parentElement.hidden = true;
       // Gemerkte Meldungen mit dem aktuellen Stand auffrischen (z. B. neue KI-Zusammenfassung)
       for (const link of Object.keys(saved)) if (byLink.has(link)) saved[link] = { ...byLink.get(link), savedAt: saved[link].savedAt };
       const gen = new Date(data.generated);
