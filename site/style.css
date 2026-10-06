@@ -359,4 +359,17 @@ a.co-rival:hover { background: color-mix(in srgb, var(--t-konkurrenz) 10%, var(-
 .fb-status { font-size: 13.5px; color: var(--muted); }
 .fb-status.ok { color: var(--new); }
 .fb-status.err { color: var(--warn); }
-@media (max-width: 640px) { .fb-label { display: none; } }
+/* Schwebender Feedback-Knopf unten rechts, damit er auffällt, ohne den Kopf zu füllen */
+.fb-fab { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: inline-flex; align-items: center; gap: 6px;
+  border: 0; border-radius: 999px; padding: 11px 18px; background: var(--accent); color: #fff;
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.22);
+  transition: transform .15s ease, box-shadow .15s ease; }
+.fb-fab[hidden] { display: none; }
+.fb-fab:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(0,0,0,.28); }
+.fb-fab:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .fb-fab { right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); padding: 0; width: 54px; height: 54px; justify-content: center; font-size: 24px; }
+  .fb-label { display: none; }
+}
+@media print { .fb-fab { display: none; } }
+body:has(.fb-fab:not([hidden])) main { padding-bottom: 76px; }
