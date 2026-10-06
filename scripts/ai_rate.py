@@ -125,6 +125,16 @@ def _call_anthropic(batch, key):
     return _parse(block["input"].get("results"), batch)
 
 
+class _KeepPost(urllib.request.HTTPRedirectHandler):
+    """GitHub Models leitet um; urllib würde dabei aus POST ein GET machen."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return urllib.request.Request(newurl, data=req.data, headers=dict(req.header_items()), method="POST")
+
+
+_github_opener = urllib.request.build_opener(_KeepPost)
+
+
 def _call_github(batch, token):
     """GitHub Models: kostenlos mit dem GITHUB_TOKEN des Workflows (Tageslimit, daher sparsam)."""
     body = json.dumps({
@@ -142,8 +152,9 @@ def _call_github(batch, token):
     req = urllib.request.Request(GITHUB_URL, data=body, headers={
         "Authorization": f"Bearer {token}", "Content-Type": "application/json",
         "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
-    with urllib.request.urlopen(req, timeout=120) as r:
+    with _github_opener.open(req, timeout=120) as r:
         raw = r.read().decode("utf-8", "replace")
+        final_url = r.geturl()
     try:
         data = json.loads(raw)
         content = data["choices"][0]["message"]["content"] or ""
@@ -151,7 +162,7 @@ def _call_github(batch, token):
         start, end = content.find("{"), content.rfind("}")
         return _parse(json.loads(content[start:end + 1]).get("results"), batch)
     except (ValueError, KeyError, IndexError, TypeError) as e:
-        raise ValueError(f"{e.__class__.__name__}; Antwort: {raw[:220]!r}") from None
+        raise ValueError(f"{e.__class__.__name__}; {final_url}; Antwort: {raw[:200]!r}") from None
 
 
 def rate(topics, cache):
