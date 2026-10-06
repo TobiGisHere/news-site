@@ -143,9 +143,15 @@ def _call_github(batch, token):
         "Authorization": f"Bearer {token}", "Content-Type": "application/json",
         "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
     with urllib.request.urlopen(req, timeout=120) as r:
-        data = json.loads(r.read())
-    content = data["choices"][0]["message"]["content"]
-    return _parse(json.loads(content).get("results"), batch)
+        raw = r.read().decode("utf-8", "replace")
+    try:
+        data = json.loads(raw)
+        content = data["choices"][0]["message"]["content"] or ""
+        # Manche Modelle setzen das JSON in ```json-Blöcke
+        start, end = content.find("{"), content.rfind("}")
+        return _parse(json.loads(content[start:end + 1]).get("results"), batch)
+    except (ValueError, KeyError, IndexError, TypeError) as e:
+        raise ValueError(f"{e.__class__.__name__}; Antwort: {raw[:220]!r}") from None
 
 
 def rate(topics, cache):
