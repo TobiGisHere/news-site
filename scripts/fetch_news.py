@@ -426,6 +426,157 @@ def fetch_simap(topic, source):
     return items
 
 
+# ---------------------------------------------------------------- Weitere nationale Portale
+
+# Grobe Vorauswahl für Portale ohne Suchfunktion: Helm- und Ballistikbegriffe in vielen Sprachen.
+# Die eigentliche Auswahl passiert danach über require_keywords des Themas.
+TENDER_PREFILTER = re.compile(
+    r"helm|hełm|kask|casque|casco|kiiver|ķiver|šalm|kypär|hjelm|hjälm|шолом|přilb|prilb|kacig|čelad|sisak|"
+    r"ballist|balist|kuloodporn|pare-balle|antibala|bullet|body armo|kogelwerend|kuulikindel", re.I)
+
+
+def _days_ago(n):
+    return (dt.date.today() - dt.timedelta(days=n))
+
+
+def fetch_ezamowienia(topic, source):
+    """Polen: nationale Bekanntmachungen (BZP) unterhalb der EU-Schwelle, Suche im Auftragsgegenstand."""
+    items, seen = [], set()
+    since = _days_ago(source.get("days", 180)).isoformat()
+    for q in source.get("queries", ["balistyczn"]):
+        url = ("https://ezamowienia.gov.pl/mo-board/api/v1/Board/Search?NoticeType=ContractNotice"
+               f"&OrderObject={urllib.parse.quote(q)}&PublicationDateFrom={since}"
+               "&SortingColumnName=PublicationDate&SortingDirection=DESC&PageNumber=1&PageSize=100")
+        for n in json.loads(http_get(url)):
+            key = n.get("objectId") or n.get("noticeNumber")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            it = make_item(topic, source["name"], n.get("orderObject"),
+                           f"https://ezamowienia.gov.pl/mo-client-board/bzp/notice-details/{n['objectId']}",
+                           to_iso(n.get("publicationDate")), " · ".join(x for x in (n.get("cpvCode"), n.get("bzpNumber")) if x),
+                           publisher="e-Zamówienia (Polen)",
+                           extra={"buyer": n.get("organizationName"), "country": "POL", "domain": "ezamowienia.gov.pl",
+                                  "deadline": to_iso(n.get("submittingOffersDate"))})
+            if it:
+                items.append(it)
+    return items
+
+
+def fetch_boamp(topic, source):
+    """Frankreich: BOAMP über die offene Opendatasoft-Schnittstelle."""
+    items, seen = [], set()
+    since = _days_ago(source.get("days", 180)).isoformat()
+    for q in source.get("queries", ["casque"]):
+        where = f'search(objet,"{q}") AND dateparution>=date\'{since}\''
+        url = ("https://boamp-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/boamp/records?"
+               + urllib.parse.urlencode({"where": where, "order_by": "dateparution desc", "limit": 100}))
+        for r in json.loads(http_get(url)).get("results", []):
+            if r.get("idweb") in seen:
+                continue
+            seen.add(r.get("idweb"))
+            it = make_item(topic, source["name"], r.get("objet"), r.get("url_avis"), to_iso(r.get("dateparution")),
+                           " · ".join(x for x in (r.get("nature_libelle"), r.get("type_marche") if isinstance(r.get("type_marche"), str) else None) if x),
+                           publisher="BOAMP (Frankreich)",
+                           extra={"buyer": r.get("nomacheteur"), "country": "FRA", "domain": "boamp.fr",
+                                  "deadline": to_iso(r.get("datelimitereponse"))})
+            if it:
+                items.append(it)
+    return items
+
+
+def fetch_contracts_finder(topic, source):
+    """Großbritannien: Contracts Finder (auch Aufträge unterhalb der Schwelle), Stichwortsuche per POST."""
+    items, seen = [], set()
+    since = _days_ago(source.get("days", 180)).isoformat() + "T00:00:00"
+    for q in source.get("queries", ["helmet"]):
+        body = json.dumps({"searchCriteria": {"keyword": q, "publishedFrom": since, "types": ["Contract"]}, "size": 100}).encode()
+        raw = http_get("https://www.contractsfinder.service.gov.uk/api/rest/2/search_notices/json", data=body,
+                       headers={"Content-Type": "application/json", "Accept": "application/json"})
+        for n in json.loads(raw).get("noticeList", []):
+            n = n.get("item") or {}
+            if n.get("id") in seen:
+                continue
+            seen.add(n.get("id"))
+            it = make_item(topic, source["name"], html.unescape(n.get("title") or ""),
+                           f"https://www.contractsfinder.service.gov.uk/Notice/{n.get('id')}",
+                           to_iso(n.get("publishedDate")), n.get("description") or "",
+                           publisher="Contracts Finder (UK)",
+                           extra={"buyer": n.get("organisationName"), "country": "GBR", "domain": "contractsfinder.service.gov.uk",
+                                  "deadline": to_iso(n.get("deadlineDate"))})
+            if it:
+                items.append(it)
+    return items
+
+
+def fetch_nspa(topic, source):
+    """NATO NSPA: stündlich aktualisierte XML-Liste aller Geschäftsmöglichkeiten."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(http_get(source["url"]))
+    items = []
+    for el in root.iter():
+        if not el.tag.endswith("Item"):
+            continue
+        f = {c.tag: (c.text or "").strip() for c in el}
+        title = f.get("Title") or f.get("ProductName") or f.get("ProductNameEN")
+        if not title or not TENDER_PREFILTER.search(title):
+            continue
+        kind = {"FBOItem": "Vorankündigung", "RFPItem": "Ausschreibung", "NOIItem": "Absichtserklärung"}.get(el.tag, el.tag)
+        it = make_item(topic, source["name"], title, f.get("DetailsPage"), to_iso(f.get("PublicationDate")),
+                       " · ".join(x for x in (kind, f.get("CollectiveNumber") or f.get("OpportunityId")) if x),
+                       publisher="NSPA (NATO)",
+                       extra={"buyer": "NATO Support and Procurement Agency", "domain": "nspa.nato.int",
+                              "deadline": to_iso(f.get("RFPClosingDate") or f.get("RFPTentativeDate"))})
+        if it:
+            items.append(it)
+    return items
+
+
+def fetch_canadabuys(topic, source):
+    """Kanada: offene Bundesausschreibungen als CSV (keine Suche, daher lokale Vorauswahl)."""
+    import csv
+    raw = http_get(source["url"]).decode("utf-8-sig", "replace")
+    items = []
+    for r in csv.DictReader(io.StringIO(raw)):
+        title = r.get("title-titre-eng") or r.get("title-titre-fra") or ""
+        desc = r.get("gsinDescription-nibsDescription-eng") or ""
+        if not TENDER_PREFILTER.search(f"{title} {desc}"):
+            continue
+        it = make_item(topic, source["name"], title, r.get("noticeURL-URLavis-eng") or r.get("noticeURL-URLavis-fra"),
+                       to_iso(r.get("publicationDate-datePublication")), desc, publisher="CanadaBuys (Kanada)",
+                       extra={"buyer": r.get("contractingEntityName-nomEntitContractante-eng"), "country": "CAN",
+                              "domain": "canadabuys.canada.ca", "deadline": to_iso(r.get("tenderClosingDate-appelOffresDateCloture"))})
+        if it:
+            items.append(it)
+    return items
+
+
+def fetch_latvia(topic, source, days):
+    """Lettland: tägliche JSON-Dateien des Beschaffungsamts IUB (keine Suche, daher lokale Vorauswahl)."""
+    items = []
+    for n in range(days):
+        d = _days_ago(n)
+        url = f"https://open.iub.gov.lv/data/notice/{d:%Y}/{d:%m}/{d:%d-%m-%Y}.json"
+        try:
+            notices = json.loads(http_get(url))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:  # Wochenende/Feiertag oder noch nicht erzeugt
+                continue
+            raise
+        for x in notices if isinstance(notices, list) else []:
+            title = x.get("name") or ""
+            if not TENDER_PREFILTER.search(title):
+                continue
+            tp = x.get("tenderingProcess") or {}
+            link = tp.get("documentsURL") or (x.get("organizationData") or {}).get("websiteURIClient") or f"https://open.iub.gov.lv/#{x.get('identifier')}"
+            it = make_item(topic, source["name"], title, link, d.isoformat() + "T00:00:00+00:00",
+                           " · ".join(v for v in (x.get("noticeType"), x.get("cpvType")) if v), publisher="IUB (Lettland)",
+                           extra={"buyer": (x.get("organizationData") or {}).get("name"), "country": "LVA", "domain": "iub.gov.lv"})
+            if it:
+                items.append(it)
+    return items
+
+
 # ---------------------------------------------------------------- Fachliteratur (OpenAlex)
 
 OPENALEX = "https://api.openalex.org/works?search={q}&filter=from_publication_date:{since}&sort=publication_date:desc&per-page=40&mailto=news-site@example.com"
@@ -656,6 +807,18 @@ def run_job(job, matchers, previous_links):
                 items = fetch_openalex(job["topic"], job["source"])
             elif "simap.ch" in job["url"]:
                 items = fetch_simap(job["topic"], job["source"])
+            elif "ezamowienia.gov.pl" in job["url"]:
+                items = fetch_ezamowienia(job["topic"], job["source"])
+            elif "boamp" in job["url"]:
+                items = fetch_boamp(job["topic"], job["source"])
+            elif "contractsfinder" in job["url"]:
+                items = fetch_contracts_finder(job["topic"], job["source"])
+            elif "nspa.nato.int" in job["url"]:
+                items = fetch_nspa(job["topic"], job["source"])
+            elif "canadabuys" in job["url"]:
+                items = fetch_canadabuys(job["topic"], job["source"])
+            elif "iub.gov.lv" in job["url"]:
+                items = fetch_latvia(job["topic"], job["source"], 3 if previous_links else 30)
             elif "oeffentlichevergabe" in job["url"]:
                 items = fetch_oev(job["topic"], job["source"], 3 if previous_links else 21)
             else:

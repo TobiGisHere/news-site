@@ -96,13 +96,6 @@
           "note": "OCDS-API, nach CPV filtern"
         },
         {
-          "name": "NSPA Business Opportunities (NATO)",
-          "type": "info",
-          "url": "https://www.nspa.nato.int/business/procurement/open-business-opportunities",
-          "verified": false,
-          "note": "Seite blockiert automatische Abrufe (403). Ersatz: Google-News-Suche NSPA Helm."
-        },
-        {
           "name": "Google News: Ausschreibung Schutzhelm",
           "type": "gnews",
           "query": "Ausschreibung (Schutzhelm OR \"ballistischer Helm\" OR VPAM)",
@@ -119,6 +112,58 @@
           "type": "gnews",
           "query": "NSPA (helmet OR helmets OR Helm)",
           "verified": false
+        },
+        {
+          "name": "e-Zamówienia (Polen, national)",
+          "type": "api",
+          "url": "https://ezamowienia.gov.pl/mo-board/api/v1/Board/Search",
+          "queries": [
+            "balistyczn",
+            "kuloodporn",
+            "hełmów",
+            "hełmy"
+          ],
+          "note": "Polnische Bekanntmachungen auch unterhalb der EU-Schwelle"
+        },
+        {
+          "name": "BOAMP (Frankreich)",
+          "type": "api",
+          "url": "https://boamp-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/boamp/records",
+          "queries": [
+            "casque",
+            "casques",
+            "pare-balles",
+            "balistique"
+          ]
+        },
+        {
+          "name": "Contracts Finder (UK, unterhalb der Schwelle)",
+          "type": "api",
+          "url": "https://www.contractsfinder.service.gov.uk/api/rest/2/search_notices/json",
+          "queries": [
+            "helmet",
+            "ballistic"
+          ]
+        },
+        {
+          "name": "NSPA eProcurement (NATO)",
+          "type": "api",
+          "url": "https://eportal.nspa.nato.int/eProcurement/XML/eProcurementData.xml"
+        },
+        {
+          "name": "CanadaBuys (Kanada)",
+          "type": "api",
+          "url": "https://canadabuys.canada.ca/opendata/pub/openTenderNotice-ouvertAvisAppelOffres.csv"
+        },
+        {
+          "name": "Riigihanked (Estland)",
+          "type": "rss",
+          "url": "https://riigihanked.riik.ee/rhr/api/public/v1/rss"
+        },
+        {
+          "name": "IUB Open Data (Lettland)",
+          "type": "api",
+          "url": "https://open.iub.gov.lv/data/notice/"
         }
       ],
       "short": "Ausschreibungen",
@@ -135,7 +180,14 @@
         "hjälm",
         "sisak",
         "čelad",
-        "prilba"
+        "prilba",
+        "hełm",
+        "kiiver",
+        "ķiver",
+        "šalm",
+        "шолом",
+        "přilb",
+        "kacig"
       ],
       "exclude_keywords": [
         "wilhelm",
@@ -183,7 +235,10 @@
         "gefecht",
         "combat",
         "military helmet",
-        "Militärhelm"
+        "Militärhelm",
+        "kuulikindel",
+        "кулезахис",
+        "балістич"
       ]
     },
     {
