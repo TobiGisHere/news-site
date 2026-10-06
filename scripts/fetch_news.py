@@ -535,7 +535,7 @@ def fetch_nspa(topic, source):
 def fetch_canadabuys(topic, source):
     """Kanada: offene Bundesausschreibungen als CSV (keine Suche, daher lokale Vorauswahl)."""
     import csv
-    raw = http_get(source["url"]).decode("utf-8-sig", "replace")
+    raw = http_get(source["url"], headers={"User-Agent": BROWSER_UA, "Accept": "text/csv,*/*"}).decode("utf-8-sig", "replace")
     items = []
     for r in csv.DictReader(io.StringIO(raw)):
         title = r.get("title-titre-eng") or r.get("title-titre-fra") or ""
@@ -563,6 +563,8 @@ def fetch_latvia(topic, source, days):
             if e.code == 404:  # Wochenende/Feiertag oder noch nicht erzeugt
                 continue
             raise
+        except ValueError:  # Tagesdatei fehlt, der Server liefert dann eine HTML-Seite
+            continue
         for x in notices if isinstance(notices, list) else []:
             title = x.get("name") or ""
             if not TENDER_PREFILTER.search(title):
