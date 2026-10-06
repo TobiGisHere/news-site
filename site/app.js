@@ -145,7 +145,7 @@
     const p = String(title || "").split(" – ");
     return p.length >= 3 ? { category: p[1], title: p.slice(2).join(" – ") } : null;
   };
-  const isTed = (it) => it.topic === "ausschreibungen" && it.domain === "ted.europa.eu";
+  const isTed = (it) => ["ausschreibungen", "zuschlaege"].includes(it.topic) && it.domain === "ted.europa.eu";
   const titleOf = (it) => {
     const t = (german() && it.ai?.title_de) || it.title;
     return isTed(it) ? (tedParts(t)?.title || t) : t;
@@ -455,7 +455,7 @@
 
   // ------------------------------------------------------------ Zuschläge
 
-  const fmtMoney = (v, cur) => v == null ? "" : new Intl.NumberFormat("de-DE", { style: "currency", currency: cur || "EUR", maximumFractionDigits: 0, notation: v >= 1e6 ? "compact" : "standard" }).format(v);
+  const fmtMoney = (v, cur) => v == null ? "" : new Intl.NumberFormat("de-DE", { style: "currency", currency: cur || "EUR", maximumFractionDigits: v >= 1e6 ? 1 : 0, notation: v >= 1e6 ? "compact" : "standard" }).format(v);
   const whoTag = (name) => {
     if (matches(name, OWN)) return "own";
     return PROFILES.find((p) => matches(name, p.aliases))?.id || "";
@@ -605,6 +605,8 @@
   function renderGrid() {
     const q = search.value.trim();
     grid.classList.toggle("single", activeTab !== "alle");
+    // Tabellen dürfen die volle Breite nutzen
+    grid.classList.toggle("wide", activeTab === "ausschreibungen");
     if (activeTab === "termine") {
       grid.innerHTML = `<section class="tile" style="--tc:var(--t-konkurrenz)">
         <header class="tile-head"><span class="tile-icon">📅</span><h2>Messen und Termine</h2>

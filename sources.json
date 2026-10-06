@@ -403,7 +403,17 @@
         }
       ],
       "reject_keywords": [
-        "motogp"
+        "motogp",
+        "motorrad",
+        "motorcycle",
+        "biker",
+        "rider",
+        "moto ",
+        "helmet review",
+        "im test"
+      ],
+      "require_keywords": [
+        "schuberth"
       ]
     },
     {

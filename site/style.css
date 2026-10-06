@@ -329,3 +329,4 @@ a.co-rival:hover { background: color-mix(in srgb, var(--t-konkurrenz) 10%, var(-
 .profile-kpis b { color: var(--t-konkurrenz); font-size: 18px; margin-right: 3px; }
 .back { border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 999px;
   width: 30px; height: 30px; font: inherit; cursor: pointer; flex: none; }
+.grid.single.wide { max-width: none; }

@@ -41,7 +41,7 @@ BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 TIMEOUT = 25
 MAX_ITEMS_PER_TOPIC = 80
 MAX_AGE_DAYS = {"ausschreibungen": 365, "zuschlaege": 730, "konkurrenz": 120, "schuberth": 180,
-                "branche": 30, "technologie": 365, "normen": 365}
+                "branche": 30, "technologie": 365, "normen": 730}
 DEFAULT_MAX_AGE_DAYS = 14
 
 # Nur Schutzkopfbedeckungen/Helme (18444…), keine Westen oder Schutzkleidung.
