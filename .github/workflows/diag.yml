@@ -15,6 +15,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set +e
           mkdir -p /tmp/out; cd /tmp/out
           {
           echo "== models.github.ai"; curl -sS -i -X POST https://models.github.ai/inference/chat/completions \
