@@ -1,20 +1,30 @@
-"""KI-Bewertung der Meldungen mit Claude.
+"""KI-Bewertung der Meldungen.
 
 Jede neue Meldung bekommt eine Relevanz von 0 bis 10 für den Markt ballistischer Schutzhelme,
 eine deutsche Kurzfassung und eine Begründung. Bereits bewertete Links kommen aus dem Cache,
-damit pro Lauf nur neue Meldungen Kosten verursachen. Ohne ANTHROPIC_API_KEY passiert nichts.
+damit pro Lauf nur neue Meldungen bewertet werden.
+
+Standard ist GitHub Models (kostenlos über den GITHUB_TOKEN des Workflows, Tageslimit).
+Ist ein ANTHROPIC_API_KEY hinterlegt, wird stattdessen Claude genutzt. Ohne beides passiert nichts.
 """
 
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = os.environ.get("AI_MODEL", "claude-haiku-4-5")
-BATCH = 20
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_MODEL = os.environ.get("AI_MODEL", "claude-haiku-4-5")
+GITHUB_URL = "https://models.github.ai/inference/chat/completions"
+GITHUB_MODEL = os.environ.get("GITHUB_AI_MODEL", "openai/gpt-4o-mini")
+BATCH = 15
 MAX_NEW_PER_RUN = 300
+# GitHub Models erlaubt nur wenige Anfragen pro Tag und Minute: pro Lauf begrenzen, Rest folgt im nächsten Lauf
+GITHUB_MAX_BATCHES = 8
+GITHUB_PAUSE = 5
 # Meldungen unter dieser Relevanz werden ausgeblendet (Ausschreibungen etwas großzügiger)
 MIN_SCORE = {"ausschreibungen": 3, "zuschlaege": 3, "schuberth": 3}
 DEFAULT_MIN_SCORE = 4
@@ -72,32 +82,24 @@ TOOL = {
 }
 
 
-def _call(batch, key):
-    lines = []
-    for n, it in enumerate(batch):
-        lines.append(json.dumps({
-            "id": n, "rubrik": it["topic"], "titel": it["title"], "quelle": it.get("source"),
-            "auftraggeber": it.get("buyer"), "gewinner": it.get("winners"), "text": (it.get("summary") or "")[:700],
-        }, ensure_ascii=False))
-    body = json.dumps({
-        "model": MODEL,
-        "max_tokens": 6000,
-        "system": SYSTEM,
-        "tools": [TOOL],
-        "tool_choice": {"type": "tool", "name": "bewertung"},
-        "messages": [{"role": "user", "content": "Bewerte diese Meldungen (eine JSON-Zeile je Meldung):\n" + "\n".join(lines)}],
-    }).encode()
-    req = urllib.request.Request(API_URL, data=body, headers={
-        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        data = json.loads(r.read())
-    block = next(b for b in data["content"] if b["type"] == "tool_use")
+def _lines(batch):
+    return "\n".join(json.dumps({
+        "id": n, "rubrik": it["topic"], "titel": it["title"], "quelle": it.get("source"),
+        "auftraggeber": it.get("buyer"), "gewinner": it.get("winners"), "text": (it.get("summary") or "")[:600],
+    }, ensure_ascii=False) for n, it in enumerate(batch))
+
+
+def _parse(results, batch):
     out = {}
-    for res in block["input"].get("results", []):
+    for res in results or []:
         i = res.get("id")
         if isinstance(i, int) and 0 <= i < len(batch):
+            try:
+                score = max(0, min(10, int(res.get("score", 0))))
+            except (TypeError, ValueError):
+                continue
             out[batch[i]["link"]] = {
-                "score": max(0, min(10, int(res.get("score", 0)))),
+                "score": score,
                 "title_de": (res.get("title_de") or "").strip()[:300] or None,
                 "summary": (res.get("summary") or "").strip()[:400],
                 "why": (res.get("why") or "").strip()[:80],
@@ -106,16 +108,58 @@ def _call(batch, key):
     return out
 
 
+def _call_anthropic(batch, key):
+    body = json.dumps({
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": 6000,
+        "system": SYSTEM,
+        "tools": [TOOL],
+        "tool_choice": {"type": "tool", "name": "bewertung"},
+        "messages": [{"role": "user", "content": "Bewerte diese Meldungen (eine JSON-Zeile je Meldung):\n" + _lines(batch)}],
+    }).encode()
+    req = urllib.request.Request(ANTHROPIC_URL, data=body, headers={
+        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        data = json.loads(r.read())
+    block = next(b for b in data["content"] if b["type"] == "tool_use")
+    return _parse(block["input"].get("results"), batch)
+
+
+def _call_github(batch, token):
+    """GitHub Models: kostenlos mit dem GITHUB_TOKEN des Workflows (Tageslimit, daher sparsam)."""
+    body = json.dumps({
+        "model": GITHUB_MODEL,
+        "temperature": 0.2,
+        "max_tokens": 4000,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": SYSTEM + "\n\nAntworte ausschließlich mit JSON der Form "
+             '{"results": [{"id": 0, "score": 7, "title_de": "...", "summary": "...", "why": "...", "facts": ""}]}, '
+             "genau ein Eintrag je Meldung."},
+            {"role": "user", "content": "Bewerte diese Meldungen (eine JSON-Zeile je Meldung):\n" + _lines(batch)},
+        ],
+    }).encode()
+    req = urllib.request.Request(GITHUB_URL, data=body, headers={
+        "Authorization": f"Bearer {token}", "Content-Type": "application/json",
+        "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        data = json.loads(r.read())
+    content = data["choices"][0]["message"]["content"]
+    return _parse(json.loads(content).get("results"), batch)
+
+
 def rate(topics, cache):
     """Bewertet neue Meldungen, blendet irrelevante aus und gibt den neuen Cache zurück."""
-    key = os.environ.get("ANTHROPIC_API_KEY")
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    github_token = os.environ.get("GITHUB_TOKEN")
     all_items = [it for t in topics for it in t["items"]]
-    if not key:
-        # Ohne Schlüssel vorhandene Bewertungen weiter anzeigen, aber nichts ausblenden
+    if not anthropic_key and not github_token:
+        # Ohne Zugang vorhandene Bewertungen weiter anzeigen, aber nichts ausblenden
         for it in all_items:
             if it["link"] in cache:
                 it["ai"] = cache[it["link"]]
-        return cache, "kein API-Schlüssel"
+        return cache, "kein KI-Zugang"
+
     def needs(it):
         c = cache.get(it["link"])
         # Ältere Bewertungen ohne Übersetzung nachholen; ausgeblendete (nur Score) nicht
@@ -124,16 +168,35 @@ def rate(topics, cache):
     batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
     errors = []
 
-    def run(b):
-        try:
-            return _call(b, key)
-        except Exception as e:  # noqa: BLE001 - nicht bewertete Meldungen bleiben sichtbar
-            errors.append(f"{e.__class__.__name__}: {str(e)[:200]}")
-            return {}
+    if anthropic_key:
+        provider = "Claude"
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        for res in pool.map(run, batches):
-            cache.update(res)
+        def run(b):
+            try:
+                return _call_anthropic(b, anthropic_key)
+            except Exception as e:  # noqa: BLE001 - nicht bewertete Meldungen bleiben sichtbar
+                errors.append(f"{e.__class__.__name__}: {str(e)[:200]}")
+                return {}
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for res in pool.map(run, batches):
+                cache.update(res)
+    else:
+        provider = "GitHub Models"
+        batches = batches[:GITHUB_MAX_BATCHES]
+        for n, b in enumerate(batches):
+            if n:
+                time.sleep(GITHUB_PAUSE)
+            try:
+                cache.update(_call_github(b, github_token))
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode("utf-8", "replace")[:200]
+                errors.append(f"HTTP {e.code}: {detail}")
+                if e.code in (401, 403, 429):  # Limit erreicht oder kein Zugriff: im nächsten Lauf weiter
+                    break
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{e.__class__.__name__}: {str(e)[:200]}")
+    rated = sum(1 for it in todo if it["link"] in cache and not needs(it))
 
     dropped = 0
     for t in topics:
@@ -150,7 +213,7 @@ def rate(topics, cache):
     # Cache auf aktuelle Kandidaten begrenzen, damit die Datei nicht endlos wächst
     current = {it["link"] for it in all_items}
     cache = {k: v for k, v in cache.items() if k in current}
-    msg = f"{len(todo)} neu bewertet, {dropped} ausgeblendet"
+    msg = f"{provider}: {rated} neu bewertet, {len(todo) - rated} offen, {dropped} ausgeblendet"
     if errors:
         msg += f", {len(errors)} Fehler: {errors[0]}"
         print("KI-Fehler: " + " | ".join(errors), file=sys.stderr)

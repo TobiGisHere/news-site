@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  models: read      # KI-Bewertung über GitHub Models (kostenlos)
   pages: write
   id-token: write
 
@@ -37,7 +38,8 @@ jobs:
       - name: Quellen abrufen
         run: python scripts/fetch_news.py
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # optional, sonst GitHub Models
       - name: Mails (Sofortalarm, Wochen-Digest)
         run: python scripts/notify.py ${{ inputs.test_mail && '--digest' || '' }}
         continue-on-error: true
