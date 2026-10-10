@@ -279,7 +279,8 @@
         "кулезахис",
         "балістич"
       ],
-      "ai_borderline": true
+      "ai_borderline": true,
+      "max_items": 250
     },
     {
       "id": "zuschlaege",

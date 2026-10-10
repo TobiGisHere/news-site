@@ -1104,6 +1104,8 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
     topics_out = []
     for topic in sorted(cfg["topics"], key=lambda t: t.get("priority", 9)):
         tid = topic["id"]
+        # Themen mit vielen Quellen (Ausschreibungen) dürfen mehr Einträge behalten
+        top_limit = limit * topic["max_items"] // MAX_ITEMS_PER_TOPIC if topic.get("max_items") else limit
         max_age = dt.timedelta(days=MAX_AGE_DAYS.get(tid, DEFAULT_MAX_AGE_DAYS))
         require = require_matcher(topic.get("require_keywords"), topic.get("exclude_keywords"))
         require_also = require_matcher(topic.get("require_also_keywords"))
@@ -1145,7 +1147,7 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
             lines = "%0A".join(f"{(d['published'] or '')[:10]} {d['title'][:110]}".replace("%", "%25") for d in recent[:40])
             print(f"::notice title=Aussortiert {topic.get('short', tid)} ({len(recent)} letzte 180 Tage)::{lines}")
         topics_out.append({"id": tid, "name": topic["name"], "short": topic.get("short", topic["name"]), "priority": topic.get("priority"),
-                           "items": items[:limit] + borderline[:limit]})
+                           "max_items": topic.get("max_items"), "items": items[:top_limit] + borderline[:top_limit]})
     return topics_out
 
 
@@ -1206,7 +1208,7 @@ def main():
     ai_cache, ai_msg = ai_rate.rate(topics, ai_cache)
     for t in topics:
         t["items"].sort(key=lambda i: i["published"] or "", reverse=True)
-        t["items"] = t["items"][:MAX_ITEMS_PER_TOPIC]
+        t["items"] = t["items"][:t.pop("max_items", None) or MAX_ITEMS_PER_TOPIC]
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "topics": topics,
