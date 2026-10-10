@@ -1,0 +1,10 @@
+[
+ {
+  "name": "uapost2",
+  "url": "https://prozorro.gov.ua/api/search/tenders",
+  "status": 200,
+  "final_url": "https://prozorro.gov.ua/api/search/tenders",
+  "ctype": "application/json",
+  "size": 30164
+ }
+]
