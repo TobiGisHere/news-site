@@ -34,6 +34,8 @@ GEMINI_MAX_BATCHES = 20
 # Meldungen unter dieser Relevanz werden ausgeblendet (Ausschreibungen etwas großzügiger)
 MIN_SCORE = {"ausschreibungen": 3, "zuschlaege": 3, "schuberth": 3}
 DEFAULT_MIN_SCORE = 4
+# Grenzfälle ohne "ballistisch" im Text bleiben nur bei klarer Relevanz sichtbar
+BORDERLINE_MIN_SCORE = 7
 
 SYSTEM = """Du bewertest Meldungen für eine persönliche Marktbeobachtung rund um ballistische Schutzhelme \
 (Hersteller- und Vertriebssicht: Militär, Polizei, Spezialeinheiten). Der Leser will nur sehen, was für dieses Geschäft zählt.
@@ -56,6 +58,11 @@ Behind-Armor Blunt Trauma, Blast/Schädel-Hirn-Trauma durch Beschuss, Helmprüfu
 0-2 = Sport-Gehirnerschütterungen ohne Schutzbezug, Archäologie, Medizin ohne Schutzbezug.
 - weltpolitik: Hoch = Geopolitik mit Folgen für Verteidigungsbeschaffung, Nachfrage nach Schutzausrüstung, Rüstungsbudgets, \
 Lieferketten/Logistik, Exportregeln; niedrig = Innenpolitik und Allgemeines.
+
+Einträge mit "grenzfall": true sind Helm-Ausschreibungen, deren Text "ballistisch" nicht ausdrücklich nennt. \
+Hier streng sein: 7-10 nur, wenn es wahrscheinlich um Schutzhelme für Militär, Polizei oder Spezialkräfte geht \
+(Gefechtshelm, Einsatzhelm, Polizeihelm, Schutzausrüstung für Soldaten); Feuerwehr-, Rettungsdienst-, Industrie-, Bau-, \
+Motorrad-, Fahrrad-, Sport- und Medizinhelme sowie Kopfhörer, VR-"casques" und Kasko-Versicherungen 0-2.
 
 Für jede Meldung: score (ganze Zahl), title_de (Titel auf Deutsch übersetzt; ist er schon deutsch, unverändert übernehmen; Eigennamen, Produktnamen und Normen nicht übersetzen), summary (1-2 sachliche Sätze auf Deutsch, was drinsteht und warum es zählt; \
 keine Floskeln, nichts erfinden), why (max. 8 Wörter Begründung), facts (nur bei Ausschreibungen und Zuschlägen: Menge, Wert oder Helmtyp, \
@@ -92,6 +99,7 @@ def _lines(batch):
     return "\n".join(json.dumps({
         "id": n, "rubrik": it["topic"], "titel": it["title"], "quelle": it.get("source"),
         "auftraggeber": it.get("buyer"), "gewinner": it.get("winners"), "text": (it.get("summary") or "")[:600],
+        **({"grenzfall": True} if it.get("borderline") else {}),
     }, ensure_ascii=False) for n, it in enumerate(batch))
 
 
@@ -196,6 +204,12 @@ def _call_github(batch, token):
     raise RuntimeError(" | ".join(problems))
 
 
+def available():
+    """Ist ein KI-Zugang eingerichtet? (GitHub Models nur auf ausdrücklichen Wunsch)"""
+    return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("GEMINI_API_KEY")
+                or (os.environ.get("USE_GITHUB_MODELS") and os.environ.get("GITHUB_TOKEN")))
+
+
 def rate(topics, cache):
     """Bewertet neue Meldungen, blendet irrelevante aus und gibt den neuen Cache zurück."""
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -280,9 +294,12 @@ def rate(topics, cache):
         keep = []
         for it in t["items"]:
             ai = cache.get(it["link"])
+            if it.get("borderline") and not ai:
+                continue  # Grenzfall noch nicht geprüft: erst nach der KI-Prüfung zeigen
             if ai:
                 it["ai"] = ai
-                if ai["score"] < MIN_SCORE.get(t["id"], DEFAULT_MIN_SCORE):
+                limit = BORDERLINE_MIN_SCORE if it.get("borderline") else MIN_SCORE.get(t["id"], DEFAULT_MIN_SCORE)
+                if ai["score"] < limit:
                     dropped += 1
                     continue
             keep.append(it)

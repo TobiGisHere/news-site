@@ -586,6 +586,122 @@ def fetch_latvia(topic, source, days):
     return items
 
 
+
+# Spanien: ATOM-Syndikation der Plattform (je Datei rund 70-500 Einträge, "next" führt zu älteren Dateien)
+ES_NS = {"a": "http://www.w3.org/2005/Atom",
+         "cbc": "urn:dgpe:names:draft:codice:schema:xsd:CommonBasicComponents-2",
+         "cac": "urn:dgpe:names:draft:codice:schema:xsd:CommonAggregateComponents-2",
+         "pe": "urn:dgpe:names:draft:codice-place-ext:schema:xsd:CommonBasicComponents-2"}
+ES_MAX_FILES = 14
+
+
+def fetch_spain(topic, source, hours):
+    """Spanien (Plataforma de Contratación): alle Änderungen der letzten Stunden, lokal vorgefiltert."""
+    from xml.etree import ElementTree as ET
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
+    url, items = source["url"], []
+    for _ in range(ES_MAX_FILES):
+        root = ET.fromstring(http_get(url))
+        oldest = None
+        for e in root.findall("a:entry", ES_NS):
+            updated = to_iso(e.findtext("a:updated", "", ES_NS))
+            oldest = min(oldest or updated, updated) if updated else oldest
+            title = e.findtext("a:title", "", ES_NS)
+            cpvs = [c.text or "" for c in e.iter(f"{{{ES_NS['cbc']}}}ItemClassificationCode")]
+            if not (any(c.startswith(TED_CPV_PREFIXES) for c in cpvs) or TENDER_PREFILTER.search(title)):
+                continue
+            state = e.findtext(".//pe:ContractFolderStatusCode", "", ES_NS)
+            buyer = e.findtext(".//cac:Party/cac:PartyName/cbc:Name", "", ES_NS)  # erste Partei = Auftraggeber
+            deadline = e.findtext(".//cac:TenderSubmissionDeadlinePeriod/cbc:EndDate", "", ES_NS)
+            winners = list(dict.fromkeys(w.text.strip() for w in e.findall(".//cac:WinningParty/cac:PartyName/cbc:Name", ES_NS) if w.text))
+            link_el = e.find("a:link", ES_NS)
+            extra = {"buyer": buyer or None, "country": "ESP", "domain": "contrataciondelestado.es",
+                     "deadline": to_iso(deadline) if state in ("PUB", "PRE") else None}
+            item_topic = topic
+            if state == "ANUL":
+                extra.update(status="abgebrochen")
+            elif state in ("ADJ", "RES") and winners:
+                item_topic = "zuschlaege"
+                extra.update(winners=winners[:12])
+            it = make_item(item_topic, source["name"], title, link_el.get("href") if link_el is not None else "",
+                           updated, e.findtext("a:summary", "", ES_NS), publisher="Plataforma de Contratación", extra=extra)
+            if it:
+                items.append(it)
+        nxt = next((l.get("href") for l in root.findall("a:link", ES_NS) if l.get("rel") == "next"), None)
+        if not nxt or (oldest and oldest < cutoff.isoformat()):
+            break
+        url = nxt
+    return items
+
+
+PROZORRO_SEARCH = "https://prozorro.gov.ua/api/search/tenders"
+PROZORRO_CLOSED = {"cancelled": "abgebrochen", "unsuccessful": "abgebrochen"}
+
+
+def fetch_prozorro(topic, source):
+    """Ukraine: Suche der Prozorro-Website (offen, ohne Schlüssel), mehrere Seiten je Suchbegriff."""
+    items, seen = [], set()
+    oldest = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS["ausschreibungen"])).isoformat()
+    for q in source.get("queries", ["шолом кулезахисний"]):
+        for page in range(1, 4):
+            data = http_post_json(PROZORRO_SEARCH, {"text": q, "page": page})
+            batch = data.get("data") or []
+            for t in batch:
+                tid = t.get("tenderID") or ""
+                m = re.match(r"UA-(\d{4}-\d{2}-\d{2})-", tid)
+                if not m or tid in seen or m.group(1) < oldest:
+                    continue
+                seen.add(tid)
+                pe = t.get("procuringEntity") or {}
+                value = t.get("value") or {}
+                extra = {"buyer": pe.get("name") or None, "country": "UKR", "domain": "prozorro.gov.ua",
+                         "deadline": to_iso((t.get("tenderPeriod") or {}).get("endDate"))
+                         if t.get("status") in ("active.enquiries", "active.tendering") else None}
+                if value.get("amount"):
+                    extra.update(estimate=round(value["amount"]), currency=value.get("currency"))
+                if t.get("status") in PROZORRO_CLOSED:
+                    extra.update(status=PROZORRO_CLOSED[t["status"]])
+                it = make_item(topic, source["name"], t.get("title") or tid, f"https://prozorro.gov.ua/tender/{tid}",
+                               m.group(1) + "T00:00:00+00:00", (pe.get("address") or {}).get("locality") or "",
+                               publisher="Prozorro (Ukraine)", extra=extra)
+                if it:
+                    items.append(it)
+            if len(batch) < (data.get("per_page") or 20):
+                break
+    return items
+
+
+SAM_SEARCH = "https://api.sam.gov/opportunities/v2/search"
+
+
+def fetch_sam(topic, source):
+    """USA: SAM.gov Opportunities (kostenloser Schlüssel in SAM_API_KEY)."""
+    key = os.environ["SAM_API_KEY"]
+    today = dt.date.today()
+    items, seen = [], set()
+    for q in source.get("queries", ["helmet"]):
+        params = {"api_key": key, "postedFrom": f"{today - dt.timedelta(days=180):%m/%d/%Y}",
+                  "postedTo": f"{today:%m/%d/%Y}", "title": q, "limit": 1000}
+        data = json.loads(http_get(f"{SAM_SEARCH}?{urllib.parse.urlencode(params)}", headers={"Accept": "application/json"}))
+        for o in data.get("opportunitiesData") or []:
+            if o.get("noticeId") in seen:
+                continue
+            seen.add(o.get("noticeId"))
+            awarded = (o.get("award") or {}).get("awardee") or {}
+            extra = {"buyer": (o.get("fullParentPathName") or "").split(".")[-1] or None, "country": "USA", "domain": "sam.gov",
+                     "deadline": to_iso(o.get("responseDeadLine"))}
+            item_topic = topic
+            if awarded.get("name"):
+                item_topic = "zuschlaege"
+                extra.update(winners=[awarded["name"]], deadline=None)
+            it = make_item(item_topic, source["name"], o.get("title") or o.get("solicitationNumber") or "",
+                           o.get("uiLink") or f"https://sam.gov/opp/{o.get('noticeId')}/view",
+                           to_iso(o.get("postedDate")), " · ".join(x for x in (o.get("type"), o.get("solicitationNumber")) if x),
+                           publisher="SAM.gov", extra=extra)
+            if it:
+                items.append(it)
+    return items
+
 # ---------------------------------------------------------------- Fachliteratur (OpenAlex)
 
 OPENALEX = "https://api.openalex.org/works?search={q}&filter=from_publication_date:{since}&sort=publication_date:desc&per-page=40&mailto=news-site@example.com"
@@ -627,6 +743,18 @@ TED_BALLISTIC_FT = (
 )
 
 
+TED_PROCEDURE_TYPES = {"open": "Offenes Verfahren", "restricted": "Nicht offenes Verfahren",
+                       "neg-w-call": "Verhandlungsverfahren", "neg-wo-call": "Verhandlungsverfahren ohne Bekanntmachung",
+                       "comp-dial": "Wettbewerblicher Dialog", "innovation": "Innovationspartnerschaft",
+                       "oth-single": "Sonstiges einstufiges Verfahren", "oth-mult": "Sonstiges mehrstufiges Verfahren"}
+TED_NON_AWARD = {"no-rece": "keine Angebote eingegangen", "all-rej": "alle Angebote abgelehnt",
+                 "ins-fund": "keine Mittel", "chan-need": "Bedarf geändert", "other": None}
+# Abbruch im Titel (z. B. Litauen "NUTRAUKTAS"), falls das Statusfeld fehlt
+TED_CANCEL_RE = re.compile(r"\b(nutrauktas|nutraukta|unieważni\w*|zrušen[oáé]|annul[ée]e?|cancel+ed|aufgehoben|keskeytysilmoitus)\b", re.I)
+TED_WINDOW_DAYS = 120
+TED_MAX_PAGES = 4
+
+
 def fetch_ted(topic, source, match=None):
     # Zuschläge reichen weiter zurück als offene Ausschreibungen
     since = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS["zuschlaege"])).strftime("%Y%m%d")
@@ -636,12 +764,18 @@ def fetch_ted(topic, source, match=None):
     # Los-Titel und -Beschreibung, damit der Ballistik-Filter auch den Text sieht (falls die API die Felder kennt)
     # dazu die Zuschlagsfelder (Gewinner, Bieter, Wert), die nur Zuschlagsbekanntmachungen tragen
     extra_fields = ["title-lot", "description-lot", "winner-name", "winner-country", "organisation-name-tenderer",
-                    "total-value", "total-value-cur", "contract-conclusion-date"]
+                    "total-value", "total-value-cur", "contract-conclusion-date",
+                    # Verfahrensdetails (eForms): Teilnahmefrist, Schätzwert, Verfahrensart, Laufzeit, Unterlagen,
+                    # Verfahrens-ID (verbindet Ausschreibung, Änderungen und Zuschlag) und Zuschlagsstatus je Los
+                    "deadline-receipt-request-date-lot", "estimated-value-proc", "estimated-value-cur-proc",
+                    "estimated-value-lot", "estimated-value-cur-lot", "procedure-type", "contract-duration-period-lot",
+                    "document-url-lot", "buyer-email", "procedure-identifier", "change-notice-version-identifier",
+                    "winner-selection-status", "non-award-justification"]
 
     def run_query(q):
         fields = base_fields + extra_fields
         notices, page, total = [], 1, None
-        while page <= 4:
+        while page <= TED_MAX_PAGES:
             try:
                 data = http_post_json(source["url"], {"query": q, "fields": fields, "limit": 250, "page": page,
                                                       "scope": "ALL", "paginationMode": "PAGE_NUMBER"})
@@ -697,9 +831,21 @@ def fetch_ted(topic, source, match=None):
         except urllib.error.HTTPError as e:
             b_counts.append(f"Fehler {e.code}")
     b_total = "/".join(b_counts)
-    # 2) Alle Bekanntmachungen mit Helm-CPV-Codes
-    by_cpv, c_total, _ = run_query(
-        f"classification-cpv IN ({cpv}) AND publication-date >= {since} SORT BY publication-date DESC")
+    # 2) Alle Bekanntmachungen mit Helm-CPV-Codes, in Zeitscheiben, damit keine Abfrage an die 1.000er-Grenze stößt
+    by_cpv, c_counts, capped = [], [], []
+    start = dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS["zuschlaege"])
+    while start <= dt.date.today():
+        end = start + dt.timedelta(days=TED_WINDOW_DAYS)
+        found, total, _ = run_query(f"classification-cpv IN ({cpv}) AND publication-date >= {start:%Y%m%d} "
+                                    f"AND publication-date < {end:%Y%m%d} SORT BY publication-date DESC")
+        by_cpv += found
+        c_counts.append(str(total))
+        if total > len(found):
+            capped.append(f"{start:%d.%m.%Y}")
+        start = end
+    c_total = "/".join(c_counts)
+    if capped and os.environ.get("GITHUB_ACTIONS"):
+        print(f"::warning title=TED::Zeitscheibe ab {', '.join(capped)} hat mehr als {TED_MAX_PAGES * 250} Treffer, bitte TED_WINDOW_DAYS verkleinern")
     if os.environ.get("GITHUB_ACTIONS"):
         print(f"::notice title=TED::Ballistik-Volltext: {len(ballistic)} von {b_total}, Helm-CPV: {len(by_cpv)} von {c_total}, Losfelder: {b_extra}")
 
@@ -715,14 +861,36 @@ def fetch_ted(topic, source, match=None):
             cpvs = [str(c) for c in (cpvs if isinstance(cpvs, list) else [cpvs])]
             lot_text = clean_text(f"{all_text(n.get('title-lot'))} {all_text(n.get('description-lot'))}", 600)
             deadline = to_iso(pick_lang(n.get("deadline-receipt-tender-date-lot")))
+            # Zweistufige Verfahren nennen statt der Angebotsfrist nur die Frist für Teilnahmeanträge
+            request_deadline = to_iso(pick_lang(n.get("deadline-receipt-request-date-lot")))
             country = pick_lang(n.get("buyer-country"))
             buyer = pick_lang(n.get("buyer-name"))
             notice_type = str(n.get("notice-type") or "")
-            extra = {"deadline": deadline, "buyer": buyer or None, "country": country or None,
-                     "domain": "ted.europa.eu", "ballistic": is_ballistic or None, "notice_type": notice_type or None}
+            extra = {"deadline": deadline or request_deadline, "deadline_kind": "request" if request_deadline and not deadline else None,
+                     "buyer": buyer or None, "country": country or None,
+                     "domain": "ted.europa.eu", "ballistic": is_ballistic or None, "notice_type": notice_type or None,
+                     "procedure": pick_lang(n.get("procedure-identifier")) or None,
+                     "procedure_type": TED_PROCEDURE_TYPES.get(pick_lang(n.get("procedure-type"))) or None,
+                     "duration": ted_duration(n.get("contract-duration-period-lot")),
+                     "docs": next((u for u in all_values(n.get("document-url-lot")) if u.startswith("http")), None),
+                     "contact": pick_lang(n.get("buyer-email")) or None,
+                     "replaces": pick_lang(n.get("change-notice-version-identifier")) or None}
+            est, est_cur = ted_amount(n.get("estimated-value-proc")), pick_lang(n.get("estimated-value-cur-proc"))
+            if est is None:
+                lots = [ted_amount(v) for v in (n.get("estimated-value-lot") or [])]
+                est = round(sum(v for v in lots if v)) if any(lots) else None
+                est_cur = pick_lang(n.get("estimated-value-cur-lot"))
+            if est:
+                extra.update(estimate=est, currency=est_cur or None)
             # Zuschlagsbekanntmachungen (can-*, veat) gehören in die Zuschlagsauswertung, nicht zu den offenen Verfahren
             is_award = notice_type.startswith("can") or notice_type == "veat"
-            if is_award:
+            status = [str(x) for x in (n.get("winner-selection-status") or [])]
+            # Alle Lose ohne Zuschlag geschlossen: Verfahren abgebrochen, kein Zuschlag
+            cancelled = bool(is_award and status and all(x.startswith("clos") for x in status)) or bool(TED_CANCEL_RE.search(title))
+            if cancelled:
+                reasons = [TED_NON_AWARD.get(str(r), "") for r in (n.get("non-award-justification") or [])]
+                extra.update(status="abgebrochen", status_reason=next((r for r in reasons if r), None), deadline=None)
+            elif is_award:
                 value = n.get("total-value")
                 value = value[0] if isinstance(value, list) and value else value
                 try:
@@ -736,7 +904,7 @@ def fetch_ted(topic, source, match=None):
                              value=value, currency=pick_lang(n.get("total-value-cur")) or None,
                              awarded=to_iso(pick_lang(n.get("contract-conclusion-date"))))
             it = make_item(
-                "zuschlaege" if is_award else topic, source["name"], title or f"TED {pub_no}",
+                "zuschlaege" if is_award and not cancelled else topic, source["name"], title or f"TED {pub_no}",
                 f"https://ted.europa.eu/de/notice/-/detail/{pub_no}",
                 to_iso(pick_lang(n.get("publication-date"))),
                 " · ".join(x for x in (buyer, lot_text) if x),
@@ -745,16 +913,86 @@ def fetch_ted(topic, source, match=None):
             )
             if it:
                 items.append(it)
+    return ted_merge_procedures(items)
+
+
+def ted_amount(v):
+    v = v[0] if isinstance(v, list) and v else v
+    try:
+        return round(float(v)) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def ted_duration(v):
+    """Vertragslaufzeit des ersten Loses, z. B. "48 Monate"."""
+    v = v[0] if isinstance(v, list) and v else v
+    if not isinstance(v, dict) or not v.get("value"):
+        return None
+    unit = {"MONTH": "Monate", "YEAR": "Jahre", "DAY": "Tage", "WEEK": "Wochen"}.get(str(v.get("unit")), "")
+    return f"{v['value']} {unit}".strip()
+
+
+def ted_merge_procedures(items):
+    """Fasst Bekanntmachungen desselben Verfahrens zusammen.
+
+    - Änderungsbekanntmachungen ersetzen die ältere Fassung (nur die neueste bleibt, mit Hinweis "geändert").
+    - Ein Abbruch markiert die Ausschreibung als abgebrochen statt als eigener Eintrag zu erscheinen.
+    - Ein Zuschlag wird mit der Ausschreibung verknüpft.
+    Verdrängte Einträge bekommen das Thema "verworfen", damit auch ihre alten Stände aus der Vorgänger-Datei
+    nicht wieder auftauchen (finalize kennt dieses Thema nicht und lässt sie weg).
+    """
+    by_proc = {}
+    for it in items:
+        if it.get("procedure"):
+            by_proc.setdefault(it["procedure"], []).append(it)
+    for group in by_proc.values():
+        tenders = sorted((i for i in group if i["topic"] != "zuschlaege" and i.get("status") != "abgebrochen"),
+                         key=lambda i: i["published"] or "", reverse=True)
+        cancels = [i for i in group if i.get("status") == "abgebrochen"]
+        awards = [i for i in group if i["topic"] == "zuschlaege"]
+        if tenders:
+            newest = tenders[0]
+            if len(tenders) > 1:
+                newest["changed"] = len(tenders) - 1
+                newest["first_published"] = min(i["published"] or "" for i in tenders) or None
+                newest["deadline"] = newest.get("deadline") or next((i["deadline"] for i in tenders if i.get("deadline")), None)
+                for old in tenders[1:]:
+                    old["topic"] = "verworfen"
+            if cancels:
+                c = max(cancels, key=lambda i: i["published"] or "")
+                newest.update(status="abgebrochen", status_reason=c.get("status_reason"), status_link=c["link"],
+                              status_date=c["published"])
+                for c in cancels:
+                    c["topic"] = "verworfen"
+            if awards:
+                a = max(awards, key=lambda i: i["published"] or "")
+                newest.update(award_link=a["link"], award_date=a["published"], award_winners=a.get("winners"))
+                for a in awards:
+                    a["tender_link"] = newest["link"]
+        elif len(cancels) > 1:
+            for c in sorted(cancels, key=lambda i: i["published"] or "", reverse=True)[1:]:
+                c["topic"] = "verworfen"
     return items
 
 
-def fetch_find_a_tender(topic, source, match):
-    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+FAT_MAX_PAGES = 30
+
+
+def fetch_find_a_tender(topic, source, match, days=30):
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
     url = source["url"] + "?" + urllib.parse.urlencode({"updatedFrom": since, "stages": "tender", "limit": 100})
-    data = json.loads(http_get(url, headers={"Accept": "application/json"}))
+    # Die API liefert höchstens 100 Meldungen je Seite; über den "next"-Link weiterblättern
+    releases = []
+    for _ in range(FAT_MAX_PAGES):
+        data = json.loads(http_get(url, headers={"Accept": "application/json"}))
+        releases += data.get("releases", [])
+        url = (data.get("links") or {}).get("next")
+        if not url or not data.get("releases"):
+            break
     prefixes = TED_CPV_PREFIXES
     items = []
-    for rel in data.get("releases", []):
+    for rel in releases:
         tender = rel.get("tender") or {}
         cpvs = [((tender.get("classification") or {}).get("id") or "")]
         cpvs += [((i.get("classification") or {}).get("id") or "") for i in tender.get("items", [])]
@@ -790,6 +1028,8 @@ def build_jobs(cfg):
                 q = s.get("query") or s.get("gnews_query")
                 jobs.append({"topic": tid, "name": s["name"], "kind": "gnews", "url": gnews_url(template, q), "filter": s.get("filter")})
             elif stype == "api":
+                if s.get("env") and not os.environ.get(s["env"]):
+                    continue  # Quelle braucht einen (kostenlosen) Schlüssel, der noch fehlt
                 jobs.append({"topic": tid, "name": s["name"], "kind": "api", "url": s["url"], "source": s})
             elif stype == "scrape" and s.get("url"):
                 jobs.append({"topic": tid, "name": s["name"], "kind": "scrape", "url": s["url"], "filter": s.get("filter"), "source": s})
@@ -811,7 +1051,7 @@ def run_job(job, matchers, previous_links):
             if "ted.europa.eu" in job["url"]:
                 items = fetch_ted(job["topic"], job["source"], matchers.get(job["topic"]))
             elif "find-tender" in job["url"]:
-                items = fetch_find_a_tender(job["topic"], job["source"], matchers.get(job["topic"]))
+                items = fetch_find_a_tender(job["topic"], job["source"], matchers.get(job["topic"]), 3 if previous_links else 30)
             elif "openalex.org" in job["url"]:
                 items = fetch_openalex(job["topic"], job["source"])
             elif "simap.ch" in job["url"]:
@@ -826,6 +1066,12 @@ def run_job(job, matchers, previous_links):
                 items = fetch_nspa(job["topic"], job["source"])
             elif "canadabuys" in job["url"]:
                 items = fetch_canadabuys(job["topic"], job["source"])
+            elif "contrataciondel" in job["url"]:
+                items = fetch_spain(job["topic"], job["source"], 26 if previous_links else 48)
+            elif "prozorro" in job["url"]:
+                items = fetch_prozorro(job["topic"], job["source"])
+            elif "sam.gov" in job["url"]:
+                items = fetch_sam(job["topic"], job["source"])
             elif "iub.gov.lv" in job["url"]:
                 items = fetch_latvia(job["topic"], job["source"], 3 if previous_links else 30)
             elif "oeffentlichevergabe" in job["url"]:
@@ -864,15 +1110,20 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
         # Themen, deren Quellen alle gefiltert werden: Filter auch auf übernommene alte Meldungen anwenden
         topic_match = keyword_matcher(topic.get("keywords")) if topic.get("filter_all") else None
         reject = require_matcher(topic.get("reject_keywords"))
-        seen_links, seen_titles, items, dropped = set(), set(), [], []
+        # Grenzfälle (Helm ja, "ballistisch" fehlt im Text) prüft die KI, statt sie pauschal auszusortieren
+        check_borderline = topic.get("ai_borderline") and ai_rate.available()
+        seen_links, seen_titles, items, borderline, dropped = set(), set(), [], [], []
         for it in sorted((i for i in all_items if i["topic"] == tid),
                          key=lambda i: i["published"] or "", reverse=True):
             text = f"{it['title']} {it['summary']}"
+            it.pop("borderline", None)
             if require and not require(text):
                 continue
             if require_also and not require_also(text) and not it.get("ballistic"):
                 dropped.append(it)
-                continue
+                if not check_borderline:
+                    continue
+                it["borderline"] = True
             if topic_match and not topic_match(it["title"] if topic.get("title_only") else text):
                 continue
             if reject and reject(text):
@@ -888,13 +1139,13 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
                     it["published"] = now.isoformat()
             seen_links.add(it["link"])
             seen_titles.add(norm)
-            items.append(it)
+            (borderline if it.get("borderline") else items).append(it)
         if dropped and os.environ.get("GITHUB_ACTIONS"):
             recent = [d for d in dropped if (d["published"] or "") >= (now - dt.timedelta(days=180)).isoformat()]
             lines = "%0A".join(f"{(d['published'] or '')[:10]} {d['title'][:110]}".replace("%", "%25") for d in recent[:40])
             print(f"::notice title=Aussortiert {topic.get('short', tid)} ({len(recent)} letzte 180 Tage)::{lines}")
         topics_out.append({"id": tid, "name": topic["name"], "short": topic.get("short", topic["name"]), "priority": topic.get("priority"),
-                           "items": items[:limit]})
+                           "items": items[:limit] + borderline[:limit]})
     return topics_out
 
 
@@ -954,6 +1205,7 @@ def main():
     topics = finalize(cfg, items, limit=MAX_ITEMS_PER_TOPIC * 2)
     ai_cache, ai_msg = ai_rate.rate(topics, ai_cache)
     for t in topics:
+        t["items"].sort(key=lambda i: i["published"] or "", reverse=True)
         t["items"] = t["items"][:MAX_ITEMS_PER_TOPIC]
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),

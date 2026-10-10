@@ -164,6 +164,37 @@
           "name": "IUB Open Data (Lettland)",
           "type": "api",
           "url": "https://open.iub.gov.lv/data/notice/"
+        },
+        {
+          "name": "Plataforma de Contratación (Spanien)",
+          "type": "api",
+          "url": "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom",
+          "note": "ATOM-Syndikation aller spanischen Ausschreibungen (auch unterhalb der EU-Schwelle), lokal vorgefiltert.",
+          "verified": true
+        },
+        {
+          "name": "Prozorro (Ukraine)",
+          "type": "api",
+          "url": "https://prozorro.gov.ua/api/search/tenders",
+          "queries": [
+            "шолом кулезахисний",
+            "балістичний шолом",
+            "каска кулезахисна"
+          ],
+          "note": "Offene Suche der Prozorro-Website, ohne Schlüssel.",
+          "verified": true
+        },
+        {
+          "name": "SAM.gov (USA)",
+          "type": "api",
+          "url": "https://api.sam.gov/opportunities/v2/search",
+          "env": "SAM_API_KEY",
+          "queries": [
+            "helmet",
+            "ballistic"
+          ],
+          "note": "Braucht einen kostenlosen API-Schlüssel (GitHub-Secret SAM_API_KEY).",
+          "verified": false
         }
       ],
       "short": "Ausschreibungen",
@@ -187,7 +218,8 @@
         "šalm",
         "шолом",
         "přilb",
-        "kacig"
+        "kacig",
+        "каск"
       ],
       "exclude_keywords": [
         "wilhelm",
@@ -199,7 +231,14 @@
         "at the helm",
         "the helm of",
         "helm the",
-        "helms the"
+        "helms the",
+        "kasko",
+        "casco urbano",
+        "casco histórico",
+        "casco antiguo",
+        "casques de réalité virtuelle",
+        "casque audio",
+        "casques audio"
       ],
       "require_also_keywords": [
         "ballist",
@@ -239,7 +278,8 @@
         "kuulikindel",
         "кулезахис",
         "балістич"
-      ]
+      ],
+      "ai_borderline": true
     },
     {
       "id": "zuschlaege",
@@ -261,7 +301,8 @@
         "hjälm",
         "sisak",
         "čelad",
-        "prilba"
+        "prilba",
+        "каск"
       ],
       "exclude_keywords": [
         "wilhelm",
@@ -273,7 +314,14 @@
         "at the helm",
         "the helm of",
         "helm the",
-        "helms the"
+        "helms the",
+        "kasko",
+        "casco urbano",
+        "casco histórico",
+        "casco antiguo",
+        "casques de réalité virtuelle",
+        "casque audio",
+        "casques audio"
       ],
       "require_also_keywords": [
         "ballist",
@@ -310,7 +358,8 @@
         "combat",
         "military helmet",
         "Militärhelm"
-      ]
+      ],
+      "ai_borderline": true
     },
     {
       "id": "konkurrenz",

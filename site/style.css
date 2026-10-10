@@ -373,3 +373,11 @@ a.co-rival:hover { background: color-mix(in srgb, var(--t-konkurrenz) 10%, var(-
 }
 @media print { .fb-fab { display: none; } }
 body:has(.fb-fab:not([hidden])) main { padding-bottom: 76px; }
+
+/* Verfahrensdetails bei Ausschreibungen */
+.item-meta.details { margin-top: 2px; font-size: 12.5px; }
+.item-meta.details a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.st { font-size: 12px; padding: 0 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); white-space: nowrap; }
+.st-cancel { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); font-weight: 600; }
+a.st-award { text-decoration: none; font-weight: 600; }
+.t-label-req { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }

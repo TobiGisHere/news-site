@@ -15,6 +15,9 @@ jobs:
       # Vorschau: kompletter Abruf mit dem Code dieses Branches, ohne die Live-Seite zu verändern
       - run: pip install -r requirements.txt && python scripts/fetch_news.py && cp site/data/news.json /tmp/probe/news.json
         continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SAM_API_KEY: ${{ secrets.SAM_API_KEY }}
       - name: Ergebnis in Branch probe-output ablegen
         run: |
           cd /tmp/probe

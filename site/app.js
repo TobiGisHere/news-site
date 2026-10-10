@@ -190,6 +190,20 @@
 
   // ------------------------------------------------------------ Briefing
 
+  // Verfahrensdetails einer Ausschreibung als kleine Zeile: Status, Änderungen, Verfahrensart, Schätzwert, Laufzeit, Unterlagen
+  function tenderDetails(it) {
+    const bits = [];
+    if (it.status === "abgebrochen") bits.push(`<span class="st st-cancel" title="${escapeHtml(it.status_date ? `Abbruch bekannt seit ${fmtDate(it.status_date)}` : "")}">✕ abgebrochen${it.status_reason ? `: ${escapeHtml(it.status_reason)}` : ""}</span>`);
+    if (it.award_link) bits.push(`<a class="st st-award" href="${escapeHtml(it.award_link)}" target="_blank" rel="noopener">✓ Zuschlag${it.award_winners?.length ? ` an ${escapeHtml(it.award_winners.slice(0, 2).join(", "))}` : " erteilt"}</a>`);
+    if (it.changed) bits.push(`<span class="st" title="${escapeHtml(it.first_published ? `Erstmals veröffentlicht ${fmtDate(it.first_published)}` : "")}">✎ ${it.changed}× geändert</span>`);
+    if (it.borderline) bits.push(`<span class="st" title="Der Text nennt „ballistisch“ nicht ausdrücklich; die KI hat die Ausschreibung trotzdem als relevant eingestuft">KI-geprüft</span>`);
+    if (it.procedure_type) bits.push(`<span>${escapeHtml(it.procedure_type)}</span>`);
+    if (it.estimate) bits.push(`<span title="Geschätzter Auftragswert laut Bekanntmachung">≈ ${fmtMoney(it.estimate, it.currency)}</span>`);
+    if (it.duration) bits.push(`<span>Laufzeit ${escapeHtml(it.duration)}</span>`);
+    if (it.docs) bits.push(`<a href="${escapeHtml(it.docs)}" target="_blank" rel="noopener">📄 Unterlagen</a>`);
+    return bits.length ? `<div class="item-meta details">${bits.join("")}</div>` : "";
+  }
+
   function tenderRow(it, q = "") {
     const due = dueInfo(it.deadline);
     return `<li class="tender ${due?.expired ? "expired" : ""}">
@@ -203,6 +217,7 @@
           ${it.published ? `<span>veröffentlicht ${relTime(it.published)}</span>` : ""}
           ${starBtn(it)}
         </div>
+        ${tenderDetails(it)}
         ${it.ai?.facts ? `<p class="facts">${escapeHtml(it.ai.facts)}</p>` : ""}
       </div>
       ${due ? `<span class="due ${due.cls}" title="${escapeHtml(due.title || "")}">${due.text}</span>` : ""}
@@ -400,13 +415,14 @@
             ${categoryOf(it) ? `<span class="cat">${escapeHtml(categoryOf(it))}</span>` : ""}
             ${starBtn(it)}
           </div>
+          ${tenderDetails(it)}
           ${it.ai?.facts ? `<p class="facts">${escapeHtml(it.ai.facts)}</p>` : ""}
           ${german() && it.ai?.summary ? `<p class="item-sum ai">${highlight(it.ai.summary, q)}</p>` : ""}
         </td>
         <td class="t-pub">${it.published ? `<span class="t-label">Veröffentlicht </span>${fmtDate(it.published)}` : "–"}</td>
-        <td class="t-due">${due ? `<span class="due ${due.cls}" title="${escapeHtml(due.title || "")}">${due.text}</span>
+        <td class="t-due">${due ? `${it.deadline_kind === "request" ? `<small class="t-label-req" title="Zweistufiges Verfahren: Frist für den Teilnahmeantrag, nicht für das Angebot">Teilnahmeantrag</small>` : ""}<span class="due ${due.cls}" title="${escapeHtml(due.title || "")}">${due.text}</span>
           ${pct ? `<div class="due-bar ${due.cls}"><span style="width:${pct}%"></span></div>` : ""}
-          ${due.expired ? "" : `<small>${fmtDate(it.deadline)}</small>`}` : `<span class="t-none">keine Frist bekannt</span>`}</td>
+          ${due.expired ? "" : `<small>${fmtDate(it.deadline)}</small>`}` : `<span class="t-none">${it.status === "abgebrochen" ? "–" : "keine Frist bekannt"}</span>`}</td>
       </tr>`;
     };
     return `<section class="tile tender-view" style="--tc:${meta(topic.id).color}">
@@ -429,8 +445,12 @@
     const rows = filtered(topic).filter((i) => !tenderCountry || (i.country || "-") === tenderCountry);
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const day = (iso) => iso ? iso.slice(0, 10) : "";
-    const lines = [["Land", "Titel", "Titel (Deutsch)", "Auftraggeber", "Veröffentlicht", "Frist", "Menge/Details", "KI-Relevanz", "Quelle", "Link"],
-      ...rows.map((i) => [i.country, i.title, i.ai?.title_de, i.buyer, day(i.published), day(i.deadline), i.ai?.facts, i.ai?.score, i.source, i.link])];
+    const lines = [["Land", "Titel", "Titel (Deutsch)", "Auftraggeber", "Veröffentlicht", "Frist", "Fristart", "Status", "Verfahrensart",
+      "Schätzwert", "Währung", "Laufzeit", "Menge/Details", "KI-Relevanz", "Quelle", "Link", "Unterlagen", "Kontakt"],
+      ...rows.map((i) => [i.country, i.title, i.ai?.title_de, i.buyer, day(i.published), day(i.deadline),
+        i.deadline ? (i.deadline_kind === "request" ? "Teilnahmeantrag" : "Angebot") : "",
+        [i.status, i.status_reason].filter(Boolean).join(": ") || (i.award_link ? "Zuschlag erteilt" : ""),
+        i.procedure_type, i.estimate, i.estimate ? i.currency : "", i.duration, i.ai?.facts, i.ai?.score, i.source, i.link, i.docs, i.contact])];
     const csv = "\ufeff" + lines.map((r) => r.map(cell).join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
