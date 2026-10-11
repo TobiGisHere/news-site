@@ -54,7 +54,8 @@ mittel = Normen für Schutzwesten; niedrig = Normen ohne ballistischen Bezug.
 Hoch = Helme, Helmaufträge, neue Helmprodukte, Übernahmen; niedrig = Themen ohne Helmbezug.
 - branche: Branche ballistischer Schutz. Hoch = Helme, Normen (VPAM, NIJ, STANAG), Aufträge, Messen; niedrig = allgemeine Wirtschaft.
 - technologie: Hoch = Forschung/Technik zu ballistischem Schutz, Helmmaterialien (UHMWPE, Aramid, Verbundwerkstoffe), \
-Behind-Armor Blunt Trauma, Blast/Schädel-Hirn-Trauma durch Beschuss, Helmprüfung; mittel = allgemeine Kopfschutz-Biomechanik; \
+neue Werkstoffe und Fertigungsverfahren für Helmschalen und Polster (Preforming, Pressen, Wickeln, 3D-Gewebe, additive Liner), \
+Kopf-Nacken-Belastung durch Helmmasse, Passform/Anthropometrie, Behind-Armor Blunt Trauma, Blast/Schädel-Hirn-Trauma durch Beschuss, Helmprüfung; mittel = allgemeine Kopfschutz-Biomechanik; \
 0-2 = Sport-Gehirnerschütterungen ohne Schutzbezug, Archäologie, Medizin ohne Schutzbezug.
 - weltpolitik: Hoch = Geopolitik mit Folgen für Verteidigungsbeschaffung, Nachfrage nach Schutzausrüstung, Rüstungsbudgets, \
 Lieferketten/Logistik, Exportregeln; niedrig = Innenpolitik und Allgemeines.

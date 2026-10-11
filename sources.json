@@ -660,7 +660,11 @@
         "armour",
         "blunt trauma",
         "UHMWPE",
-        "aramid"
+        "aramid",
+        "preform",
+        "padding",
+        "liner",
+        "head-supported"
       ],
       "exclude_keywords": [
         "wilhelm",
@@ -691,7 +695,16 @@
             "UHMWPE helmet",
             "aramid helmet impact",
             "bullet resistant helmet",
-            "helmet ballistic impact simulation"
+            "helmet ballistic impact simulation",
+            "UHMWPE ballistic temperature",
+            "UHMWPE composite ballistic limit",
+            "ballistic composite novel fiber",
+            "helmet shell preform manufacturing",
+            "composite helmet compression molding",
+            "helmet padding liner impact",
+            "helmet head-supported mass neck",
+            "helmet retention chinstrap",
+            "head anthropometry helmet fit"
           ]
         },
         {
