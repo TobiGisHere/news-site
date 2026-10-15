@@ -815,6 +815,152 @@
       ]
     },
     {
+      "id": "patente",
+      "name": "Patente: neue Anmeldungen und Schutzrechte",
+      "short": "Patente",
+      "priority": 2,
+      "note": "Neue Patentanmeldungen, Erteilungen, Gebrauchsmuster und Designs zu Schutzhelmen weltweit (CPC F41H 1/04 und A42B 3 mit Bezug zu Ballistik, Militär oder Polizei) sowie alles, was die Wettbewerber anmelden. Quelle: Google Patents, Titel und Kurzfassungen auf Englisch.",
+      "sources": [
+        {
+          "type": "api",
+          "name": "Google Patents: Schutzhelme",
+          "url": "https://patents.google.com/xhr/query",
+          "verified": true,
+          "note": "CPC F41H 1/04 (Schutzhelme), F41H 1 (persönlicher Schutz) und A42B 3 (Helme) mit ballistischem Bezug, dazu Volltextsuche.",
+          "require_keywords": [
+            "helmet",
+            "helm",
+            "headgear",
+            "head gear",
+            "head-borne",
+            "headborne",
+            "head borne",
+            "head protection",
+            "head-mounted",
+            "head mounted",
+            "mandible",
+            "visor",
+            "face shield",
+            "faceguard",
+            "face guard",
+            "nape",
+            "chin strap",
+            "chinstrap",
+            "earcup",
+            "ear cup",
+            "shroud",
+            "casque",
+            "casco",
+            "kask",
+            "schutzhelm",
+            "kopfschutz"
+          ],
+          "queries": [
+            {
+              "cpc": "F41H1/04"
+            },
+            {
+              "cpc": "F41H1"
+            },
+            {
+              "cpc": "A42B3",
+              "q": "(ballistic OR bulletproof OR \"bullet resistant\" OR \"bullet proof\" OR armor OR armour OR military OR combat OR tactical OR soldier)"
+            },
+            {
+              "q": "(\"ballistic helmet\" OR \"bulletproof helmet\" OR \"bullet resistant helmet\" OR \"combat helmet\" OR \"military helmet\" OR \"tactical helmet\")"
+            }
+          ]
+        },
+        {
+          "type": "api",
+          "name": "Google Patents: Wettbewerber",
+          "url": "https://patents.google.com/xhr/query",
+          "verified": true,
+          "note": "Alle Veröffentlichungen von Busch, Mehler und Galvion (Profilseiten); bei den übrigen Wettbewerbern nur Helmthemen.",
+          "require_keywords": [
+            "helmet",
+            "helm",
+            "headgear",
+            "head gear",
+            "head-borne",
+            "headborne",
+            "head borne",
+            "head protection",
+            "head-mounted",
+            "head mounted",
+            "mandible",
+            "visor",
+            "face shield",
+            "faceguard",
+            "face guard",
+            "nape",
+            "chin strap",
+            "chinstrap",
+            "earcup",
+            "ear cup",
+            "shroud",
+            "casque",
+            "casco",
+            "kask",
+            "schutzhelm",
+            "kopfschutz"
+          ],
+          "queries": [
+            {
+              "assignee": "Busch PROtective",
+              "filter": false
+            },
+            {
+              "assignee": "Mehler Vario System",
+              "filter": false
+            },
+            {
+              "assignee": "Mehler Systems",
+              "filter": false
+            },
+            {
+              "assignee": "Galvion",
+              "filter": false
+            },
+            {
+              "assignee": "Revision Military",
+              "filter": false
+            },
+            {
+              "assignee": "Gentex"
+            },
+            {
+              "assignee": "Team Wendy"
+            },
+            {
+              "assignee": "Ulbrichts"
+            },
+            {
+              "assignee": "ArmorSource"
+            },
+            {
+              "assignee": "MKU"
+            },
+            {
+              "assignee": "NP Aerospace"
+            },
+            {
+              "assignee": "Protection Group"
+            },
+            {
+              "assignee": "FY-Composites"
+            },
+            {
+              "assignee": "MSA Safety"
+            },
+            {
+              "assignee": "Avon Protection"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "weltpolitik",
       "name": "Geopolitik, Verteidigung & Logistik",
       "priority": 3,

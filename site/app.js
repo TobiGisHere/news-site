@@ -13,6 +13,7 @@
     branche: { icon: "🛡️", color: "var(--t-branche)" },
     technologie: { icon: "🔬", color: "var(--t-technologie)" },
     normen: { icon: "📏", color: "var(--t-technologie)" },
+    patente: { icon: "📜", color: "var(--t-technologie)" },
     weltpolitik: { icon: "🌍", color: "var(--t-weltpolitik)" },
   };
   const meta = (id) => TOPIC_META[id] || { icon: "📰", color: "var(--accent)" };
@@ -24,7 +25,7 @@
     { id: "markt", label: "Markt", icon: "🏢", color: "var(--t-konkurrenz)",
       subs: [["konkurrenz", "Wettbewerber"], ["schuberth", "Schuberth"], ["branche", "Branche"]] },
     { id: "technik", label: "Technik & Normen", icon: "🔬", color: "var(--t-technologie)",
-      subs: [["technologie", "Forschung"], ["normen", "Normen"]] },
+      subs: [["technologie", "Forschung"], ["patente", "Patente"], ["normen", "Normen"]] },
     { id: "weltpolitik", label: "Geopolitik", icon: "🌍", color: "var(--t-weltpolitik)", subs: [["weltpolitik", "Geopolitik"]] },
   ];
   const VIEWS = ["alle", "termine", "gemerkt", "profil"];
@@ -134,7 +135,7 @@
     const q = search.value.trim().toLowerCase();
     return items.filter((it) =>
       (!onlyNew.checked || isNew(it)) &&
-      (!q || `${it.title} ${it.ai?.title_de || ""} ${it.summary} ${it.ai?.summary || ""} ${it.source} ${it.buyer || ""}`.toLowerCase().includes(q)));
+      (!q || `${it.title} ${it.ai?.title_de || ""} ${it.summary} ${it.ai?.summary || ""} ${it.source} ${it.buyer || ""} ${it.number || ""}`.toLowerCase().includes(q)));
   }
   const filtered = (topic) => filterItems(topic.items);
 
@@ -359,6 +360,7 @@
           ${hotBadge(it)}
           ${withTopic ? `<span class="chip" style="--tc:${meta(it.topic).color}">${meta(it.topic).icon} ${escapeHtml(topicShort(it.topic))}</span>` : ""}
           ${it.kind === "paper" ? `<span class="paper">📄 Fachartikel</span>` : ""}
+          ${it.kind === "patent" ? `<span class="paper">📜 ${escapeHtml(it.patent_type || "Patent")}</span>` : ""}
           <span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>
           ${it.published ? `<time datetime="${it.published}" title="${new Date(it.published).toLocaleString("de-DE")}">${relTime(it.published)}</time>` : ""}
           ${starBtn(it)}
@@ -536,16 +538,71 @@
     </section>`;
   }
 
+  // ------------------------------------------------------------ Patente
+
+  // Patentämter: EP und EM (EU-Design) als EU, WO (PCT) als Welt
+  const officeFlag = (c) => c === "WO" ? "🌐" : ["EP", "EM"].includes(c) ? "🇪🇺" : flag(c);
+  let patentFilter = "alle";
+
+  function renderPatentTable(topic, q) {
+    const all = filtered(topic).sort((a, b) => (b.published || "").localeCompare(a.published || ""));
+    const isRival = (i) => !!whoTag(i.applicant);
+    const filters = [["alle", "Alle", all], ["rivalen", "Wettbewerber", all.filter(isRival)],
+      ["erteilt", "Erteilungen", all.filter((i) => i.patent_type === "Erteilung")]];
+    const items = (filters.find(([id]) => id === patentFilter) || filters[0])[2];
+    const ranking = new Map();
+    for (const it of all) if (it.applicant) {
+      const key = it.applicant.toLowerCase().replace(/\b(gmbh|co\.? kg|ltd|limited|inc|incorporated|corp(oration)?|llc)\b|[.,&]/g, "").trim();
+      const e = ranking.get(key) || { name: it.applicant, n: 0 };
+      e.n += 1; ranking.set(key, e);
+    }
+    const top = [...ranking.values()].sort((a, b) => b.n - a.n).slice(0, 8);
+    const row = (it) => `<tr>
+        <td class="t-flag" title="${escapeHtml(it.office || "")}">${officeFlag(it.office)}<small>${escapeHtml(it.office || "")}</small></td>
+        <td class="t-main">
+          <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
+          <div class="item-meta">
+            ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
+            ${hotBadge(it)}
+            <span class="cat">${escapeHtml(it.patent_type || "Patent")}</span>
+            <span>${highlight(it.number, q)}${it.also?.length ? ` <small title="${escapeHtml(it.also.join(", "))}">+${it.also.length} weitere</small>` : ""}</span>
+            ${it.priority_date ? `<span title="Prioritätsdatum">Priorität ${fmtDate(it.priority_date)}</span>` : ""}
+            ${starBtn(it)}
+          </div>
+          ${summaryOf(it) ? `<p class="item-sum${german() && it.ai?.summary ? " ai" : ""}">${highlight(summaryOf(it), q)}</p>` : ""}
+        </td>
+        <td class="t-win">${it.applicant ? companyChip(it.applicant) : `<span class="t-none">nicht angegeben</span>`}</td>
+        <td class="t-pub">${it.published ? fmtDate(it.published) : "–"}</td>
+      </tr>`;
+    return `<section class="tile tender-view" style="--tc:${meta(topic.id).color}">
+      <header class="tile-head">
+        <span class="tile-icon">${meta(topic.id).icon}</span>
+        <h2>${escapeHtml(topic.name)}</h2>
+        <span class="count">${items.length} Schutzrechte</span>
+      </header>
+      <div class="country-chips">${filters.map(([id, label, list]) =>
+        `<button type="button" data-patents="${id}" aria-pressed="${id === patentFilter}">${label} <b>${list.length}</b></button>`).join("")}</div>
+      ${top.length ? `<div class="ranking"><span class="ranking-label">Aktivste Anmelder:</span>${top.map((e) => `${companyChip(e.name)}<b>${e.n}×</b>`).join("")}</div>` : ""}
+      ${items.length ? `<div class="table-wrap"><table class="tenders awards">
+        <thead><tr><th>Amt</th><th>Schutzrecht</th><th>Anmelder</th><th>Veröffentlicht</th></tr></thead>
+        <tbody>${items.map(row).join("")}</tbody></table></div>`
+        : `<p class="empty">${topic.items.length ? "Keine Treffer." : "Noch keine neuen Patente zu Schutzhelmen."}</p>`}
+      <p class="empty small">Quelle: Google Patents, weltweit, letzte 12 Monate. Gleiche Erfindungen in mehreren Ländern stehen in einer Zeile. <span class="co co-own">Schuberth</span> ist grün markiert, Wettbewerber mit Profil sind anklickbar.</p>
+    </section>`;
+  }
+
   // ------------------------------------------------------------ Wettbewerberprofile
 
   function profileData(p) {
-    const news = data.topics.filter((t) => !["ausschreibungen", "zuschlaege"].includes(t.id))
+    const news = data.topics.filter((t) => !["ausschreibungen", "zuschlaege", "patente"].includes(t.id))
       .flatMap((t) => t.items).filter((i) => matches(`${i.title} ${i.source} ${i.via || ""}`, p.aliases))
       .sort((a, b) => (b.published || "").localeCompare(a.published || ""));
     const awards = topicById("zuschlaege")?.items || [];
     const won = awards.filter((i) => (i.winners || []).some((w) => matches(w, p.aliases)));
     const bid = awards.filter((i) => !won.includes(i) && (i.bidders || []).some((w) => matches(w, p.aliases)));
-    return { news, won, bid };
+    const patents = (topicById("patente")?.items || []).filter((i) => matches(i.applicant, p.aliases))
+      .sort((a, b) => (b.published || "").localeCompare(a.published || ""));
+    return { news, won, bid, patents };
   }
 
   function profileCards() {
@@ -555,7 +612,7 @@
       const recent = d.news.filter((i) => i.published && new Date(i.published) > month).length;
       return `<a class="profile-card" href="#profil/${p.id}">
         <span class="profile-name">${flag(p.country)} ${escapeHtml(p.name)}</span>
-        <span class="profile-stats"><b>${recent}</b> Meldungen (30 Tage) · <b>${d.won.length}</b> Zuschläge</span>
+        <span class="profile-stats"><b>${recent}</b> Meldungen (30 Tage) · <b>${d.won.length}</b> Zuschläge${topicById("patente") ? ` · <b>${d.patents.length}</b> Patente` : ""}</span>
         <span class="profile-go">Profil öffnen →</span>
       </a>`;
     }).join("")}</div>`;
@@ -573,11 +630,13 @@
         <a class="count" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(p.url.replace(/^https?:\/\/(www\.)?/, ""))} ↗</a>
       </header>
       <div class="profile-kpis">
-        <span><b>${d.news.length}</b> Meldungen</span><span><b>${d.won.length}</b> gewonnene Zuschläge</span><span><b>${d.bid.length}</b> weitere Verfahren als Bieter</span>
+        <span><b>${d.news.length}</b> Meldungen</span><span><b>${d.won.length}</b> gewonnene Zuschläge</span><span><b>${d.bid.length}</b> weitere Verfahren als Bieter</span>${topicById("patente") ? `<span><b>${d.patents.length}</b> neue Patente (12 Monate)</span>` : ""}
       </div>
       <h3 class="day">Gewonnene Zuschläge</h3>
       ${d.won.length ? awardList(d.won) : `<p class="empty">Keine Zuschläge zu ballistischen Helmen auf TED gefunden.</p>`}
       ${d.bid.length ? `<h3 class="day">Als Bieter beteiligt</h3>${awardList(d.bid)}` : ""}
+      ${topicById("patente") ? `<h3 class="day">Patente und Anmeldungen</h3>
+      ${d.patents.length ? `<ol class="items">${d.patents.map((it) => renderItem(it, q)).join("")}</ol>` : `<p class="empty">In den letzten 12 Monaten keine neuen Patente veröffentlicht.</p>`}` : ""}
       <h3 class="day">Meldungen</h3>
       ${d.news.length ? `<ol class="items">${d.news.slice(0, 30).map((it) => renderItem(it, q, true)).join("")}</ol>` : `<p class="empty">Noch keine Meldungen.</p>`}
     </section>`;
@@ -626,7 +685,7 @@
     const q = search.value.trim();
     grid.classList.toggle("single", activeTab !== "alle");
     // Tabellen dürfen die volle Breite nutzen
-    grid.classList.toggle("wide", activeTab === "ausschreibungen");
+    grid.classList.toggle("wide", activeTab === "ausschreibungen" || (activeTab === "technik" && activeSub === "patente"));
     if (activeTab === "termine") {
       grid.innerHTML = `<section class="tile" style="--tc:var(--t-konkurrenz)">
         <header class="tile-head"><span class="tile-icon">📅</span><h2>Messen und Termine</h2>
@@ -646,6 +705,7 @@
     const topic = topicById(activeSub);
     const view = activeSub === "ausschreibungen" ? renderTenderTable(topic, q)
       : activeSub === "zuschlaege" ? renderAwardTable(topic, q)
+      : activeSub === "patente" ? renderPatentTable(topic, q)
       : (activeSub === "konkurrenz" ? profileCards() : "") + topicTile(topic, q);
     grid.innerHTML = subTabs(sec) + view;
   }
@@ -714,6 +774,8 @@
     if (s) { e.preventDefault(); toggleSave(s.dataset.save); return; }
     const c = e.target.closest("button[data-country]");
     if (c) { tenderCountry = c.dataset.country; renderGrid(); return; }
+    const pf = e.target.closest("button[data-patents]");
+    if (pf) { patentFilter = pf.dataset.patents; renderGrid(); return; }
     if (e.target.closest("button[data-export]")) { exportTenders(); return; }
     const k = e.target.closest("button[data-kpi]");
     if (k) { go(() => goTopic(k.dataset.kpi)); return; }

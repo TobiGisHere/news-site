@@ -56,6 +56,10 @@ Hoch = Helme, Helmaufträge, neue Helmprodukte, Übernahmen; niedrig = Themen oh
 - technologie: Hoch = Forschung/Technik zu ballistischem Schutz, Helmmaterialien (UHMWPE, Aramid, Verbundwerkstoffe), \
 Behind-Armor Blunt Trauma, Blast/Schädel-Hirn-Trauma durch Beschuss, Helmprüfung; mittel = allgemeine Kopfschutz-Biomechanik; \
 0-2 = Sport-Gehirnerschütterungen ohne Schutzbezug, Archäologie, Medizin ohne Schutzbezug.
+- patente: Patentanmeldungen, Erteilungen, Gebrauchsmuster und Designs. 8-10 = ballistische Schutzhelme, Gefechts- oder Polizeihelme, \
+Helmschalen und Helmmaterialien, Helmzubehör für Einsatzkräfte (Montageschienen, NVG-Halter, Visiere, Mandibles, Liner, Polster), \
+Schutzrechte der Wettbewerber zu Helmen; 4-7 = übertragbare Kopfschutztechnik, Soldatensysteme der Wettbewerber; \
+0-2 = Motorrad-, Fahrrad-, Sport- und Arbeitsschutzhelme ohne Einsatzbezug, Waffen, Munition. summary: was geschützt wird, in 1-2 Sätzen.
 - weltpolitik: Hoch = Geopolitik mit Folgen für Verteidigungsbeschaffung, Nachfrage nach Schutzausrüstung, Rüstungsbudgets, \
 Lieferketten/Logistik, Exportregeln; niedrig = Innenpolitik und Allgemeines.
 
