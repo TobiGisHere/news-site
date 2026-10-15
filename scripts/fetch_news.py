@@ -41,7 +41,7 @@ BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 TIMEOUT = 25
 MAX_ITEMS_PER_TOPIC = 80
 MAX_AGE_DAYS = {"ausschreibungen": 365, "zuschlaege": 730, "konkurrenz": 120, "schuberth": 180,
-                "branche": 30, "technologie": 365, "normen": 730}
+                "branche": 30, "technologie": 365, "normen": 730, "patente": 365}
 DEFAULT_MAX_AGE_DAYS = 14
 
 # Nur Schutzkopfbedeckungen/Helme (18444…), keine Westen oder Schutzkleidung.
@@ -732,6 +732,68 @@ def fetch_openalex(topic, source):
     return items
 
 
+# ---------------------------------------------------------------- Patente (Google Patents)
+
+# Google Patents liefert die Trefferliste der Suchseite als JSON, ohne Schlüssel. "url" ist die Suchanfrage
+# so, wie sie in der Adresszeile von patents.google.com steht (cpc=…, assignee=…, q=…).
+GPATENTS = "https://patents.google.com/xhr/query?url={url}&exp="
+# Kennbuchstabe am Ende der Veröffentlichungsnummer: A = Offenlegung, B/C/E = Erteilung, U/Y = Gebrauchsmuster, S = Design
+PATENT_KIND = {"A": "Anmeldung", "B": "Erteilung", "C": "Erteilung", "E": "Erteilung",
+               "U": "Gebrauchsmuster", "Y": "Gebrauchsmuster", "S": "Design"}
+
+
+def patent_kind(number):
+    m = re.search(r"([A-Z])\d*$", number[2:])
+    return PATENT_KIND.get(m.group(1), "Veröffentlichung") if m else "Veröffentlichung"
+
+
+def fetch_google_patents(topic, source):
+    since = (dt.date.today() - dt.timedelta(days=MAX_AGE_DAYS.get(topic, 365))).strftime("%Y%m%d")
+    need = require_matcher(source.get("require_keywords"))
+    items, families = [], {}
+    for n, query in enumerate(source.get("queries", [])):
+        if n:
+            time.sleep(2)  # Google drosselt schnelle Folgeanfragen
+        params = {k: v for k, v in query.items() if k != "filter"}
+        params.update(sort="new", num="100", after=f"publication:{since}")
+        inner = "&".join(f"{k}={v.replace(' ', '+')}" for k, v in params.items())
+        url = GPATENTS.format(url=urllib.parse.quote(inner, safe=""))
+        data = json.loads(http_get(url, headers={"User-Agent": BROWSER_UA, "Accept": "application/json"}))
+        for cluster in data.get("results", {}).get("cluster", []):
+            for r in cluster.get("result", []):
+                p = r.get("patent") or {}
+                number = p.get("publication_number")
+                title, snippet = clean_text(p.get("title"), 300), clean_text(p.get("snippet"), 600)
+                if not number or not title:
+                    continue
+                if query.get("filter", True) and need and not need(f"{title} {snippet}"):
+                    continue
+                applicant = clean_text(p.get("assignee"), 160)
+                # Dieselbe Erfindung erscheint als WO, EP, US, AU …: eine Zeile je Familie, die übrigen Nummern dazu
+                fam = (re.sub(r"\W+", "", applicant.lower())[:30], re.sub(r"\W+", "", title.lower().rstrip("…"))[:60])
+                # EU-Designs einer Sammelanmeldung (EM…0001S, EM…0002S) tragen Titel in verschiedenen Sprachen
+                design = re.match(r"(EM\d+)\d{4}S$", number)
+                if design:
+                    fam = ("design", design.group(1))
+                if fam in families:
+                    main = families[fam]
+                    if number != main["number"] and number not in main["also"]:
+                        main["also"].append(number)
+                    continue
+                offices = [c["country_code"] for c in (p.get("family_metadata") or {}).get("aggregated", {}).get("country_status", [])]
+                it = make_item(topic, source["name"], title, f"https://patents.google.com/patent/{number}",
+                               to_iso(p.get("publication_date")), snippet, publisher=applicant or "Patent",
+                               extra={"kind": "patent", "number": number, "office": number[:2],
+                                      "patent_type": patent_kind(number), "applicant": applicant,
+                                      "inventor": clean_text(p.get("inventor"), 120),
+                                      "priority_date": p.get("priority_date"), "filing_date": p.get("filing_date"),
+                                      "offices": offices, "also": [], "domain": "patents.google.com"})
+                if it:
+                    families[fam] = it
+                    items.append(it)
+    return items
+
+
 # ---------------------------------------------------------------- APIs
 
 # TED-Volltextsuche: Die API akzeptiert nur einfache "A AND B"-Ausdrücke mit Platzhaltern,
@@ -1052,6 +1114,8 @@ def run_job(job, matchers, previous_links):
                 items = fetch_ted(job["topic"], job["source"], matchers.get(job["topic"]))
             elif "find-tender" in job["url"]:
                 items = fetch_find_a_tender(job["topic"], job["source"], matchers.get(job["topic"]), 3 if previous_links else 30)
+            elif "patents.google.com" in job["url"]:
+                items = fetch_google_patents(job["topic"], job["source"])
             elif "openalex.org" in job["url"]:
                 items = fetch_openalex(job["topic"], job["source"])
             elif "simap.ch" in job["url"]:

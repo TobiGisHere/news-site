@@ -122,7 +122,7 @@ def digest(data, now):
                         for i in awards[:8])
         sections.append(f"<h3 style='margin:20px 0 4px'>🏆 Neue Zuschläge</h3><ul style='padding-left:18px'>{lines}</ul>")
     groups = [("schuberth", "⭐ Schuberth"), ("konkurrenz", "🏢 Wettbewerber"), ("branche", "🛡️ Branche"),
-              ("normen", "📏 Normen"), ("technologie", "🔬 Technik und Forschung"), ("weltpolitik", "🌍 Geopolitik")]
+              ("normen", "📏 Normen"), ("technologie", "🔬 Technik und Forschung"), ("patente", "📜 Neue Patente"), ("weltpolitik", "🌍 Geopolitik")]
     for tid, label in groups:
         items = sorted((i for i in topic(data, tid) if recent(i)), key=lambda i: (score(i), i.get("published") or ""), reverse=True)[:4]
         if items:
