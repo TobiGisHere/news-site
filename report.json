@@ -1,0 +1,46 @@
+[
+ {
+  "name": "epps_dates",
+  "url": "https://data.epo.org/publication-server/rest/v1.0/publication-dates",
+  "status": 500,
+  "ctype": "application/json",
+  "size": 114
+ },
+ {
+  "name": "epps_day",
+  "url": "https://data.epo.org/publication-server/rest/v1.0/publication-dates/20261007/patents",
+  "status": 500,
+  "ctype": "application/json",
+  "size": 114
+ },
+ {
+  "name": "epps_day2",
+  "url": "https://data.epo.org/publication-server/rest/v1.0/publication-dates/20260930/patents",
+  "status": 500,
+  "ctype": "application/json",
+  "size": 114
+ },
+ {
+  "name": "ops_noauth",
+  "url": "https://ops.epo.org/3.2/rest-services/published-data/search?q=pa%3DUlbrichts",
+  "status": 403,
+  "ctype": "application/xml",
+  "size": 208
+ },
+ {
+  "name": "dpma_rss",
+  "url": "https://register.dpma.de/DPMAregister/pat/rss?query=INH%3DUlbrichts",
+  "status": 200,
+  "final_url": "https://register.dpma.de/DPMAregister/HttpSessionExpiredPage",
+  "ctype": "text/html;charset=UTF-8",
+  "size": 19451
+ },
+ {
+  "name": "gp_latest",
+  "url": "https://patents.google.com/xhr/query?url=cpc%3DA42B3%26sort%3Dnew%26num%3D10&exp=",
+  "status": 200,
+  "final_url": "https://patents.google.com/xhr/query?url=cpc%3DA42B3%26sort%3Dnew%26num%3D10&exp=",
+  "ctype": "application/json",
+  "size": 42360
+ }
+]
