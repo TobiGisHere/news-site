@@ -1,10 +1,6 @@
-gp_cpc https://patents.google.com/xhr/query?url=cpc%3DA42B3%26q%3Dballistic%26sort%3Dnew%26num%3D20&exp=
-gp_f41h https://patents.google.com/xhr/query?url=cpc%3DF41H1%2F04%26sort%3Dnew%26num%3D20&exp=
-gp_assignee https://patents.google.com/xhr/query?url=assignee%3DGalvion%26sort%3Dnew%26num%3D20&exp=
-ps_rss1 https://patentscope.wipo.int/search/en/rss.jsf?query=IC%3AF41H1%2F04&office=&rss=true&sortOption=Pub+Date+Desc
-ps_rss2 https://patentscope.wipo.int/search/rss.jsf?query=IC%3AF41H1%2F04&sortOption=Pub+Date+Desc
-pv https://search.patentsview.org/api/v1/patent/?q=%7B%22cpc_current.cpc_group_id%22%3A%22F41H1%2F04%22%7D
-ops https://ops.epo.org/3.2/rest-services/published-data/search?q=cpc%3DF41H1%2F04
-esp https://worldwide.espacenet.com/3.2/rest-services/search?lang=en,de,fr&q=cpc%3DF41H1%2F04
-fpo https://www.freepatentsonline.com/result.html?sort=chron&srch=top&query_txt=ballistic+helmet&submit=&patents_us=on&patents_us_app=on
-uspto_odp https://api.uspto.gov/api/v1/patent/applications/search?q=ballistic%20helmet
+ulb_assignee https://patents.google.com/xhr/query?url=assignee%3DUlbrichts%26sort%3Dnew%26num%3D100&exp=
+ulb_witwe https://patents.google.com/xhr/query?url=assignee%3DUlbrichts%2BWitwe%26sort%3Dnew%26num%3D100&exp=
+ulb_q https://patents.google.com/xhr/query?url=q%3DUlbrichts%26sort%3Dnew%26num%3D100&exp=
+ulb_after https://patents.google.com/xhr/query?url=assignee%3DUlbrichts%26sort%3Dnew%26num%3D100%26after%3Dpublication%3A20251015&exp=
+rim_q https://patents.google.com/xhr/query?url=q%3D(helmet%2Brim%2Breinforcement)%26sort%3Dnew%26num%3D50%26after%3Dpublication%3A20260601&exp=
+edge_q https://patents.google.com/xhr/query?url=q%3D(ballistic%2Bhelmet%2Bedge)%26sort%3Dnew%26num%3D50%26after%3Dpublication%3A20260601&exp=
