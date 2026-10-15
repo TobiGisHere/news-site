@@ -794,6 +794,118 @@ def fetch_google_patents(topic, source):
     return items
 
 
+# EPO Open Patent Services: aktueller als Google Patents (das hängt rund acht Wochen hinterher), braucht aber
+# einen kostenlosen Schlüssel (developers.epo.org, Secrets OPS_KEY und OPS_SECRET). Abfragen in CQL.
+OPS_AUTH = "https://ops.epo.org/3.2/auth/accesstoken"
+OPS_SEARCH = "https://ops.epo.org/3.2/rest-services/published-data/search/biblio?q={q}"
+OPS_DAYS = 120
+OPS_PAGES = 2
+
+
+def _list(v):
+    return v if isinstance(v, list) else [v] if v else []
+
+
+def _txt(v):
+    if isinstance(v, dict):
+        return v.get("$", "")
+    if isinstance(v, list):
+        return " ".join(_txt(x) for x in v)
+    return v or ""
+
+
+def _pick_lang(entries, langs=("en", "de")):
+    entries = _list(entries)
+    for lang in langs:
+        for e in entries:
+            if isinstance(e, dict) and e.get("@lang") == lang:
+                return e
+    return entries[0] if entries else None
+
+
+def _ops_names(parties, kind):
+    """Namen in Originalschreibweise; "epodoc" (GROSS mit [AT]) nur als Ersatz."""
+    group = (parties or {}).get(f"{kind}s", {}).get(kind)
+    names = {"original": [], "epodoc": []}
+    for a in _list(group):
+        name = _txt((a.get(f"{kind}-name") or {}).get("name"))
+        if name:
+            names.setdefault(a.get("@data-format"), []).append(name.strip(" ,"))
+    out = names["original"] or [re.sub(r"\s*\[\w+\]$", "", n).title() for n in names["epodoc"]]
+    return list(dict.fromkeys(out))
+
+
+def _ops_date(v):
+    v = _txt(v)
+    return f"{v[:4]}-{v[4:6]}-{v[6:8]}" if len(v) == 8 else None
+
+
+def fetch_epo_ops(topic, source):
+    key, secret = os.environ.get("OPS_KEY"), os.environ.get("OPS_SECRET")
+    if not key or not secret:
+        raise ValueError("OPS_KEY/OPS_SECRET fehlen")
+    import base64
+    auth = base64.b64encode(f"{key}:{secret}".encode()).decode()
+    token = json.loads(http_get(OPS_AUTH, data=b"grant_type=client_credentials",
+                                headers={"Authorization": f"Basic {auth}",
+                                         "Content-Type": "application/x-www-form-urlencoded"}))["access_token"]
+    today = dt.date.today()
+    window = f'pd within "{(today - dt.timedelta(days=OPS_DAYS)):%Y%m%d} {today:%Y%m%d}"'
+    need = require_matcher(source.get("require_keywords"))
+    items, families = [], {}
+    for query in source.get("queries", []):
+        for page in range(OPS_PAGES):
+            url = OPS_SEARCH.format(q=urllib.parse.quote(f"({query['cql']}) and {window}"))
+            try:
+                raw = http_get(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json",
+                                             "X-OPS-Range": f"{page * 100 + 1}-{page * 100 + 100}"})
+            except urllib.error.HTTPError as e:
+                if e.code == 404:  # keine Treffer
+                    break
+                raise
+            res = json.loads(raw)["ops:world-patent-data"]["ops:biblio-search"]
+            docs = _list((res.get("ops:search-result") or {}).get("exchange-documents"))
+            for wrap in docs:
+                for d in _list(wrap.get("exchange-document")):
+                    bib = d.get("bibliographic-data") or {}
+                    number = f'{d.get("@country", "")}{d.get("@doc-number", "")}{d.get("@kind", "")}'
+                    title = clean_text(_txt(_pick_lang(bib.get("invention-title"))), 300)
+                    abstract = clean_text(_txt((_pick_lang(d.get("abstract")) or {}).get("p")), 600)
+                    if not title or len(number) < 4:
+                        continue
+                    if query.get("filter", True) and need and not need(f"{title} {abstract}"):
+                        continue
+                    fam = ("ops", d.get("@family-id") or number)
+                    if fam in families:
+                        main = families[fam]
+                        if number != main["number"] and number not in main["also"]:
+                            main["also"].append(number)
+                        continue
+                    pub = next((x for x in _list((bib.get("publication-reference") or {}).get("document-id"))
+                                if x.get("@document-id-type") == "docdb"), {})
+                    app = next((x for x in _list((bib.get("application-reference") or {}).get("document-id"))
+                                if x.get("@document-id-type") == "docdb"), {})
+                    prio = [_ops_date(x.get("date")) for c in _list((bib.get("priority-claims") or {}).get("priority-claim"))
+                            for x in _list(c.get("document-id")) if x.get("date")]
+                    applicant = ", ".join(_ops_names(bib.get("parties"), "applicant")[:2])
+                    it = make_item(topic, source["name"], title,
+                                   f"https://worldwide.espacenet.com/patent/search?q=pn%3D{number}",
+                                   to_iso(_ops_date(pub.get("date"))), abstract, publisher=applicant or "Patent",
+                                   extra={"kind": "patent", "number": number, "office": number[:2],
+                                          "patent_type": patent_kind(number), "applicant": applicant,
+                                          "inventor": ", ".join(_ops_names(bib.get("parties"), "inventor")[:3]),
+                                          "priority_date": min((p for p in prio if p), default=None),
+                                          "filing_date": _ops_date(app.get("date")),
+                                          "offices": [number[:2]], "also": [], "domain": "espacenet.com"})
+                    if it:
+                        families[fam] = it
+                        items.append(it)
+            total = int(res.get("@total-result-count") or 0)
+            if total <= (page + 1) * 100:
+                break
+    return items
+
+
 # ---------------------------------------------------------------- APIs
 
 # TED-Volltextsuche: Die API akzeptiert nur einfache "A AND B"-Ausdrücke mit Platzhaltern,
@@ -1116,6 +1228,8 @@ def run_job(job, matchers, previous_links):
                 items = fetch_find_a_tender(job["topic"], job["source"], matchers.get(job["topic"]), 3 if previous_links else 30)
             elif "patents.google.com" in job["url"]:
                 items = fetch_google_patents(job["topic"], job["source"])
+            elif "ops.epo.org" in job["url"]:
+                items = fetch_epo_ops(job["topic"], job["source"])
             elif "openalex.org" in job["url"]:
                 items = fetch_openalex(job["topic"], job["source"])
             elif "simap.ch" in job["url"]:
@@ -1195,7 +1309,8 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
             if reject and reject(text):
                 continue
             norm = re.sub(r"\W+", "", it["title"].lower())[:90]
-            if it["link"] in seen_links or norm in seen_titles:
+            # Patente kommen aus zwei Quellen (Google Patents, EPO): gleiche Nummer nur einmal
+            if it["link"] in seen_links or it.get("number") in seen_links or norm in seen_titles:
                 continue
             if it["published"]:
                 pub = dt.datetime.fromisoformat(it["published"])
@@ -1204,6 +1319,8 @@ def finalize(cfg, all_items, limit=MAX_ITEMS_PER_TOPIC):
                 if pub > now + dt.timedelta(hours=2):  # Zukunftsdaten kappen
                     it["published"] = now.isoformat()
             seen_links.add(it["link"])
+            if it.get("number"):
+                seen_links.add(it["number"])
             seen_titles.add(norm)
             (borderline if it.get("borderline") else items).append(it)
         if dropped and os.environ.get("GITHUB_ACTIONS"):
