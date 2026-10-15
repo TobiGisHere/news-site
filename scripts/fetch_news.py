@@ -771,6 +771,10 @@ def fetch_google_patents(topic, source):
                 applicant = clean_text(p.get("assignee"), 160)
                 # Dieselbe Erfindung erscheint als WO, EP, US, AU …: eine Zeile je Familie, die übrigen Nummern dazu
                 fam = (re.sub(r"\W+", "", applicant.lower())[:30], re.sub(r"\W+", "", title.lower().rstrip("…"))[:60])
+                # EU-Designs einer Sammelanmeldung (EM…0001S, EM…0002S) tragen Titel in verschiedenen Sprachen
+                design = re.match(r"(EM\d+)\d{4}S$", number)
+                if design:
+                    fam = ("design", design.group(1))
                 if fam in families:
                     main = families[fam]
                     if number != main["number"] and number not in main["also"]:
