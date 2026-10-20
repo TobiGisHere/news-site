@@ -70,7 +70,19 @@ Motorrad-, Fahrrad-, Sport- und Medizinhelme sowie Kopfhörer, VR-"casques" und 
 
 Für jede Meldung: score (ganze Zahl), title_de (Titel auf Deutsch übersetzt; ist er schon deutsch, unverändert übernehmen; Eigennamen, Produktnamen und Normen nicht übersetzen), summary (1-2 sachliche Sätze auf Deutsch, was drinsteht und warum es zählt; \
 keine Floskeln, nichts erfinden), why (max. 8 Wörter Begründung), facts (nur bei Ausschreibungen und Zuschlägen: Menge, Wert oder Helmtyp, \
-falls genannt, sonst leer)."""
+falls genannt, sonst leer).
+
+Nur bei Ausschreibungen zusätzlich (sonst weglassen):
+- kind: "helm" = Beschaffung ballistischer Helme (auch als eigenes Los); "paket" = Helm nur als Teil eines Pakets mit Westen, \
+Platten oder Bekleidung ohne eigenes Helm-Los; "schutz" = Einsatz-/Schutzhelme ohne Beschussschutz (Riot, Pare-coups, PSU); \
+"spezial" = Flieger-, Hubschrauber-, Motorrad-, EOD- oder Entschärferhelme; "service" = Prüfung, Reparatur, Wartung.
+- buyer_type: "militaer" = Streitkräfte, Verteidigungsministerium, Beschaffungsagentur des Militärs, Nationalgarde; \
+"polizei" = Polizei, Grenzschutz, Zoll, Justizvollzug, Gendarmerie, Nachrichtendienste, Innenministerium; \
+"zivil" = Kommune, Feuerwehr, Zivilschutz, Unternehmen, Schule, Krankenhaus, Stiftung.
+- qty: Anzahl der Helme als ganze Zahl, nur wenn genannt, sonst 0."""
+
+TENDER_KINDS = {"helm", "paket", "schutz", "spezial", "service"}
+BUYER_TYPES = {"militaer", "polizei", "zivil"}
 
 TOOL = {
     "name": "bewertung",
@@ -89,6 +101,9 @@ TOOL = {
                         "summary": {"type": "string"},
                         "why": {"type": "string"},
                         "facts": {"type": "string"},
+                        "kind": {"type": "string", "enum": ["helm", "paket", "schutz", "spezial", "service"]},
+                        "buyer_type": {"type": "string", "enum": ["militaer", "polizei", "zivil"]},
+                        "qty": {"type": "integer", "minimum": 0},
                     },
                     "required": ["id", "score", "title_de", "summary", "why"],
                 },
@@ -123,6 +138,14 @@ def _parse(results, batch):
                 "why": (res.get("why") or "").strip()[:80],
                 "facts": (res.get("facts") or "").strip()[:120] or None,
             }
+            if batch[i]["topic"] == "ausschreibungen":
+                rec = out[batch[i]["link"]]
+                rec["kind"] = res.get("kind") if res.get("kind") in TENDER_KINDS else None
+                rec["buyer_type"] = res.get("buyer_type") if res.get("buyer_type") in BUYER_TYPES else None
+                try:
+                    rec["qty"] = max(0, int(res.get("qty") or 0)) or None
+                except (TypeError, ValueError):
+                    rec["qty"] = None
     return out
 
 
@@ -170,8 +193,9 @@ def _github_request(url, model, gh_headers, batch, token, max_tokens=4000):
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": SYSTEM + "\n\nAntworte ausschließlich mit JSON der Form "
-             '{"results": [{"id": 0, "score": 7, "title_de": "...", "summary": "...", "why": "...", "facts": ""}]}, '
-             "genau ein Eintrag je Meldung."},
+             '{"results": [{"id": 0, "score": 7, "title_de": "...", "summary": "...", "why": "...", "facts": "", '
+             '"kind": "helm", "buyer_type": "polizei", "qty": 0}]}, '
+             "genau ein Eintrag je Meldung; kind, buyer_type und qty nur bei Ausschreibungen."},
             {"role": "user", "content": "Bewerte diese Meldungen (eine JSON-Zeile je Meldung):\n" + _lines(batch)},
         ],
     }).encode()
@@ -232,8 +256,9 @@ def rate(topics, cache):
 
     def needs(it):
         c = cache.get(it["link"])
-        # Ältere Bewertungen ohne Übersetzung nachholen; ausgeblendete (nur Score) nicht
-        return c is None or ("summary" in c and "title_de" not in c)
+        # Ältere Bewertungen ohne Übersetzung nachholen; ausgeblendete (nur Score) nicht.
+        # Ausschreibungen ohne Helmtyp und Auftraggeber (für die Passung) ebenfalls einmal neu bewerten.
+        return c is None or ("summary" in c and ("title_de" not in c or (it["topic"] == "ausschreibungen" and "kind" not in c)))
     todo = [it for it in all_items if needs(it)][:MAX_NEW_PER_RUN]
     batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
     errors = []
