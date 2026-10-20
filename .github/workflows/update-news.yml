@@ -42,6 +42,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}         # kostenlos über Google AI Studio
           SAM_API_KEY: ${{ secrets.SAM_API_KEY }}               # optional, kostenlos über SAM.gov (USA-Ausschreibungen)
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # optional, kostenpflichtig
+          NEUER_HELM: ${{ secrets.NEUER_HELM }}                 # optional: Daten eines noch nicht veröffentlichten Helms für die Passung
       - name: Mails (Sofortalarm, Wochen-Digest)
         run: python scripts/notify.py ${{ inputs.test_mail && '--digest' || '' }}
         continue-on-error: true

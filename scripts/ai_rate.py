@@ -89,6 +89,12 @@ Polizeihelm mit Visier) oder Helm nur Teil eines Pakets; "nein" = Gewehrbeschuss
 Riot-, Flieger-, Motorrad- oder Entschärferhelm, Dienstleistung; "unklar" = Schutzklasse nicht erkennbar.
 - requirement: geforderte Schutzklasse oder Ausführung am Helm in max. 6 Wörtern (z. B. "NIJ IIIA, High-Cut"), sonst leer."""
 
+# Noch nicht veröffentlichter Helm aus dem GitHub-Secret NEUER_HELM: nur der KI mitteilen, nie in Texten nennen
+if os.environ.get("NEUER_HELM", "").strip():
+    SYSTEM += ("\n\nVertraulich: Zum Portfolio gehört zusätzlich ein weiterer Helm mit diesen Daten: "
+               + os.environ["NEUER_HELM"].strip()[:300]
+               + ". Was dieser Helm erfüllt, gilt bei m100 als \"passt\". Erwähne diesen Helm nie in title_de, summary, why, facts oder requirement.")
+
 TENDER_KINDS = {"helm", "paket", "schutz", "spezial", "service"}
 BUYER_TYPES = {"militaer", "polizei", "zivil"}
 M100_FIT = {"passt", "teilweise", "nein", "unklar"}

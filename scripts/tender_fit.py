@@ -11,6 +11,7 @@ buyer_type, qty). Fehlen sie, weil die Meldung noch nicht neu bewertet wurde, sc
 mehreren Sprachen dieselben Merkmale.
 """
 
+import os
 import re
 
 LEVELS = (("hoch", 80), ("mittel", 55), ("gering", 0))
@@ -20,8 +21,13 @@ LEVELS = (("hoch", 80), ("mittel", 55), ("gering", 0))
 # nach STANAG 2920; High-, Mid- und Full-Cut; zwei Schalengrößen (XS–M, M–XL); Schienen, NVG-Shroud;
 # Zubehör: ballistisches Mandible (VPAM 2, neu VPAM 3), Splitterschutzvisier, ballistisches Visier.
 # Kunden: polizeiliche und militärische Spezialeinheiten. Trainingsvariante T100C ohne Beschussschutz.
-PRODUCT_POINTS = {"passt": 50, "unklar": 35, "teilweise": 25, "nein": 0}
-PRODUCT_LABEL = {"passt": "passt zur M100", "unklar": "M100 vermutlich passend", "teilweise": "M100 nur teilweise",
+# Neue, noch nicht veröffentlichte Produkte stehen nicht im öffentlichen Repo, sondern im GitHub-Secret NEUER_HELM
+# (Freitext mit Schutzklasse, Norm, Gewicht). Die höchste darin genannte VPAM-Stufe gilt dann als abgedeckt.
+NEW_HELMET = os.environ.get("NEUER_HELM", "").strip()
+_vpam = [int(v) for v in re.findall(r"vpam\s*(\d+)", NEW_HELMET, re.I)]
+PORTFOLIO_VPAM = max(_vpam + [2])
+PRODUCT_POINTS = {"passt": 50, "portfolio": 50, "unklar": 35, "teilweise": 25, "nein": 0}
+PRODUCT_LABEL = {"passt": "passt zur M100", "portfolio": "passt zum Portfolio", "unklar": "M100 vermutlich passend", "teilweise": "M100 nur teilweise",
                  "nein": "passt nicht zur M100"}
 KIND_LABEL = {"helm": "ballistischer Helm", "paket": "Helm im Paket", "schutz": "Einsatzhelm ohne Beschuss",
               "spezial": "Spezialhelm", "service": "Dienstleistung"}
@@ -140,6 +146,8 @@ def _product(kind, text, long_text):
     if RIFLE.search(text):
         return "nein", "Gewehrbeschuss gefordert"
     if VPAM3.search(text):
+        if PORTFOLIO_VPAM >= 3:
+            return "portfolio", "VPAM 3"
         return "teilweise", "VPAM 3 bzw. schwerer Helm, M100 hat VPAM 2"
     if kind == "paket":
         return "teilweise", "Helm nur im Paket"
@@ -177,6 +185,8 @@ def assess(it):
     product, why = _product(kind, " ".join(filter(None, [text, ai.get("requirement")])), long_text)
     if ai.get("m100") in PRODUCT_POINTS:
         product, why = ai["m100"], ai.get("requirement") or why
+        if product == "passt" and PORTFOLIO_VPAM >= 3 and VPAM3.search(f"{text} {why}"):
+            product = "portfolio"  # erfüllt nicht die M100, sondern den neuen Helm
     buyer = ai.get("buyer_type") if ai.get("buyer_type") in BUYER_LABEL else _buyer(it.get("buyer") or "", text)
     qty = ai.get("qty") if isinstance(ai.get("qty"), int) and ai["qty"] > 0 else _quantity(ai.get("facts"), ai.get("title_de"), title)
     value = _value_eur(it)
