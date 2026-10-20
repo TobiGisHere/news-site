@@ -41,6 +41,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}         # kostenlos über Google AI Studio
           SAM_API_KEY: ${{ secrets.SAM_API_KEY }}               # optional, kostenlos über SAM.gov (USA-Ausschreibungen)
+          OPS_KEY: ${{ secrets.OPS_KEY }}                       # optional, kostenlos über developers.epo.org (aktuelle Patente)
+          OPS_SECRET: ${{ secrets.OPS_SECRET }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # optional, kostenpflichtig
           NEUER_HELM: ${{ secrets.NEUER_HELM }}                 # optional: Daten eines noch nicht veröffentlichten Helms für die Passung
       - name: Mails (Sofortalarm, Wochen-Digest)

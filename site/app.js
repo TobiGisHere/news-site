@@ -620,7 +620,7 @@
         <thead><tr><th>Amt</th><th>Schutzrecht</th><th>Anmelder</th><th>Veröffentlicht</th></tr></thead>
         <tbody>${items.map(row).join("")}</tbody></table></div>`
         : `<p class="empty">${topic.items.length ? "Keine Treffer." : "Noch keine neuen Patente zu Schutzhelmen."}</p>`}
-      <p class="empty small">Quelle: Google Patents, weltweit, letzte 12 Monate. Gleiche Erfindungen in mehreren Ländern stehen in einer Zeile. <span class="co co-own">Schuberth</span> ist grün markiert, Wettbewerber mit Profil sind anklickbar.</p>
+      <p class="empty small">Quellen: Europäisches Patentamt (neueste Veröffentlichungen) und Google Patents (weltweit, letzte 12 Monate, rund acht Wochen Verzug). Gleiche Erfindungen in mehreren Ländern stehen in einer Zeile. <span class="co co-own">Schuberth</span> ist grün markiert, Wettbewerber mit Profil sind anklickbar.</p>
     </section>`;
   }
 

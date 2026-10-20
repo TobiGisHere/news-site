@@ -819,8 +819,94 @@
       "name": "Patente: neue Anmeldungen und Schutzrechte",
       "short": "Patente",
       "priority": 2,
-      "note": "Neue Patentanmeldungen, Erteilungen, Gebrauchsmuster und Designs zu Schutzhelmen weltweit (CPC F41H 1/04 und A42B 3 mit Bezug zu Ballistik, Militär oder Polizei) sowie alles, was die Wettbewerber anmelden. Quelle: Google Patents, Titel und Kurzfassungen auf Englisch.",
+      "note": "Neue Patentanmeldungen, Erteilungen, Gebrauchsmuster und Designs zu Schutzhelmen weltweit (CPC F41H 1/04 und A42B 3 mit Bezug zu Ballistik, Militär oder Polizei) sowie alles, was die Wettbewerber anmelden. Quellen: EPO (aktuell, braucht kostenlosen Schlüssel) und Google Patents (rund acht Wochen Verzug).",
       "sources": [
+        {
+          "type": "api",
+          "name": "EPO: neue Patente (aktuell)",
+          "url": "https://ops.epo.org/3.2/rest-services",
+          "env": "OPS_KEY",
+          "verified": false,
+          "note": "EPO Open Patent Services, kostenloser Schlüssel über developers.epo.org (Secrets OPS_KEY und OPS_SECRET). Deckt EP, WO, DE, AT u. a. wenige Tage nach Veröffentlichung ab; Google Patents hängt rund acht Wochen hinterher.",
+          "require_keywords": [
+            "helmet",
+            "helm",
+            "headgear",
+            "head gear",
+            "head-borne",
+            "headborne",
+            "head borne",
+            "head protection",
+            "head-mounted",
+            "head mounted",
+            "mandible",
+            "visor",
+            "face shield",
+            "faceguard",
+            "face guard",
+            "nape",
+            "chin strap",
+            "chinstrap",
+            "earcup",
+            "ear cup",
+            "shroud",
+            "casque",
+            "casco",
+            "kask",
+            "schutzhelm",
+            "kopfschutz"
+          ],
+          "queries": [
+            {
+              "cql": "cpc=F41H1/04"
+            },
+            {
+              "cql": "cpc=F41H1"
+            },
+            {
+              "cql": "cpc=A42B3 and (ta=ballistic or ta=bulletproof or ta=armour or ta=armor or ta=military or ta=combat or ta=tactical or ta=ballistisch)"
+            },
+            {
+              "cql": "pa=Ulbrichts",
+              "filter": false
+            },
+            {
+              "cql": "pa=\"Busch PROtective\"",
+              "filter": false
+            },
+            {
+              "cql": "pa=\"Mehler Vario\"",
+              "filter": false
+            },
+            {
+              "cql": "pa=\"Mehler Systems\"",
+              "filter": false
+            },
+            {
+              "cql": "pa=Galvion",
+              "filter": false
+            },
+            {
+              "cql": "pa=\"Revision Military\"",
+              "filter": false
+            },
+            {
+              "cql": "pa=Gentex"
+            },
+            {
+              "cql": "pa=\"Team Wendy\""
+            },
+            {
+              "cql": "pa=ArmorSource"
+            },
+            {
+              "cql": "pa=\"NP Aerospace\""
+            },
+            {
+              "cql": "pa=\"MSA Safety\""
+            }
+          ]
+        },
         {
           "type": "api",
           "name": "Google Patents: Schutzhelme",
@@ -933,7 +1019,8 @@
               "assignee": "Team Wendy"
             },
             {
-              "assignee": "Ulbrichts"
+              "assignee": "Ulbrichts",
+              "filter": false
             },
             {
               "assignee": "ArmorSource"

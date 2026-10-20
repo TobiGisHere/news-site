@@ -18,6 +18,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SAM_API_KEY: ${{ secrets.SAM_API_KEY }}
+          OPS_KEY: ${{ secrets.OPS_KEY }}                       # optional, kostenlos über developers.epo.org (aktuelle Patente)
+          OPS_SECRET: ${{ secrets.OPS_SECRET }}
       - name: Ergebnis in Branch probe-output ablegen
         run: |
           cd /tmp/probe
