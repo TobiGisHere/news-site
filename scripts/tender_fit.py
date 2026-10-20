@@ -23,11 +23,12 @@ LEVELS = (("hoch", 80), ("mittel", 55), ("gering", 0))
 # Kunden: polizeiliche und militärische Spezialeinheiten. Trainingsvariante T100C ohne Beschussschutz.
 # Neue, noch nicht veröffentlichte Produkte stehen nicht im öffentlichen Repo, sondern im GitHub-Secret NEUER_HELM
 # (Freitext mit Schutzklasse, Norm, Gewicht). Die höchste darin genannte VPAM-Stufe gilt dann als abgedeckt.
+# Bis zum Marktstart heißt die Stufe auf der öffentlichen Seite nur "passt", ohne Produktnamen.
 NEW_HELMET = os.environ.get("NEUER_HELM", "").strip()
 _vpam = [int(v) for v in re.findall(r"vpam\s*(\d+)", NEW_HELMET, re.I)]
 PORTFOLIO_VPAM = max(_vpam + [2])
 PRODUCT_POINTS = {"passt": 50, "portfolio": 50, "unklar": 35, "teilweise": 25, "nein": 0}
-PRODUCT_LABEL = {"passt": "passt zur M100", "portfolio": "passt zum Portfolio", "unklar": "M100 vermutlich passend", "teilweise": "M100 nur teilweise",
+PRODUCT_LABEL = {"passt": "passt zur M100", "portfolio": "passt", "unklar": "M100 vermutlich passend", "teilweise": "M100 nur teilweise",
                  "nein": "passt nicht zur M100"}
 KIND_LABEL = {"helm": "ballistischer Helm", "paket": "Helm im Paket", "schutz": "Einsatzhelm ohne Beschuss",
               "spezial": "Spezialhelm", "service": "Dienstleistung"}
