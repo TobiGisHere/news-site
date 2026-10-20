@@ -5,6 +5,11 @@
   const SAVED_KEY = "news:saved";
   const LANG_KEY = "news:deutsch";
   const HOT = 8;             // ab dieser KI-Relevanz gilt eine Meldung als wichtig
+  const FIT_KEY = "news:passung";
+  const SORT_KEY = "news:sortierung";
+  // Passung einer Ausschreibung für Schuberth (berechnet beim Abruf aus Helmtyp, Auftraggeber und Umfang)
+  const FIT = { hoch: { label: "Hoch", rank: 3 }, mittel: { label: "Mittel", rank: 2 }, gering: { label: "Gering", rank: 1 } };
+  const SORTS = [["passung", "Passung"], ["frist", "Frist"], ["neu", "Neueste"]];
   const TOPIC_META = {
     ausschreibungen: { icon: "🪖", color: "var(--t-ausschreibungen)" },
     zuschlaege: { icon: "🏆", color: "var(--t-ausschreibungen)" },
@@ -76,6 +81,9 @@
   let fairs = [];
   const expanded = new Set();
   let tenderCountry = "";
+  // Standard: geringe Passung ausblenden, ein Klick auf "Gering" holt sie zurück
+  let tenderFit = new Set((store.get(FIT_KEY) ?? "hoch,mittel").split(",").filter((l) => FIT[l]));
+  let tenderSort = SORTS.some(([k]) => k === store.get(SORT_KEY)) ? store.get(SORT_KEY) : "passung";
   let saved = {};
   try { saved = JSON.parse(store.get(SAVED_KEY) || "{}") || {}; } catch { saved = {}; }
   const byLink = new Map();
@@ -156,6 +164,14 @@
   const summaryOf = (it) => (german() && it.ai?.summary) || it.summary;
   const hotBadge = (it) => it.ai?.score >= HOT
     ? `<span class="hot" title="KI-Relevanz ${it.ai.score}/10${it.ai.why ? `: ${escapeHtml(it.ai.why)}` : ""}">🔥 wichtig</span>` : "";
+  // Ältere Daten ohne Passung zählen als "mittel", damit nichts verschwindet
+  const fitRank = (it) => FIT[it.fit?.level]?.rank ?? 2;
+  const fitShown = (it) => !it.fit || tenderFit.has(it.fit.level);
+  const fitBadge = (it) => FIT[it.fit?.level]
+    ? `<span class="fit fit-${it.fit.level}" title="Passung für Schuberth: ${it.fit.score}/100 (${escapeHtml((it.fit.reasons || []).join(", "))})">${FIT[it.fit.level].label}</span>`
+    : hotBadge(it);
+  const fitWhy = (it) => it.fit?.reasons?.length ? `<span class="fit-why">${escapeHtml(it.fit.reasons.join(" · "))}</span>` : "";
+  const byFit = (a, b) => (fitRank(b) - fitRank(a)) || ((b.fit?.score ?? 0) - (a.fit?.score ?? 0));
   function starBtn(it) {
     const on = !!saved[it.link];
     return `<button type="button" class="star${on ? " on" : ""}" data-save="${escapeHtml(it.link)}" aria-pressed="${on}" title="${on ? "Von der Merkliste nehmen" : "Merken"}">${on ? "★" : "☆"}</button>`;
@@ -213,7 +229,7 @@
         <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
         <div class="item-meta">
           ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
-          ${hotBadge(it)}
+          ${fitBadge(it)}
           ${it.buyer ? `<span>${highlight(it.buyer, q)}</span>` : `<span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>`}
           ${it.published ? `<span>veröffentlicht ${relTime(it.published)}</span>` : ""}
           ${starBtn(it)}
@@ -249,6 +265,7 @@
     const tenders = data.topics.find((t) => t.id === "ausschreibungen")?.items || [];
     const open = tenders.filter((i) => i.deadline && new Date(i.deadline) > now);
     const soon = open.filter((i) => new Date(i.deadline) - now <= 14 * 86400000);
+    const openHigh = open.filter((i) => i.fit?.level === "hoch").length;
     const newTenders = tenders.filter((i) => i.published && new Date(i.published) > now - 30 * 86400000);
     const all = data.topics.flatMap((t) => t.items);
     const lastWeek = all.filter((i) => i.published && new Date(i.published) > week);
@@ -259,7 +276,8 @@
         <span class="kpi-value">${value}</span><span class="kpi-label">${label}</span>${sub ? `<span class="kpi-sub">${sub}</span>` : ""}</button>`;
     kpis.innerHTML =
       card("ausschreibungen", open.length, "offene Ausschreibungen",
-        soon.length ? `${soon.length} mit Frist in 14 Tagen` : "keine Frist in 14 Tagen", "var(--t-ausschreibungen)") +
+        [openHigh ? `${openHigh} mit hoher Passung` : "", soon.length ? `${soon.length} mit Frist in 14 Tagen` : "keine Frist in 14 Tagen"]
+          .filter(Boolean).join(" · "), "var(--t-ausschreibungen)") +
       card("ausschreibungen", newTenders.length, "neue Ausschreibungen", "letzte 30 Tage", "var(--t-ausschreibungen)") +
       (topicById("zuschlaege") ? card("zuschlaege", awards.length, "Zuschläge", "letzte 12 Monate", "var(--t-ausschreibungen)")
         : card("alle", lastWeek.length, "Meldungen", "letzte 7 Tage", "var(--new)")) +
@@ -305,9 +323,11 @@
       .slice(0, 4);
 
     const tenders = data.topics.find((t) => t.id === "ausschreibungen")?.items || [];
+    // Passende offene Ausschreibungen zuerst; geringe Passung nur, wenn sonst nichts offen ist
     const open = tenders.filter((i) => i.deadline && new Date(i.deadline) > Date.now())
-      .sort((a, b) => a.deadline.localeCompare(b.deadline));
-    const list = (open.length ? open : tenders).slice(0, 5);
+      .sort((a, b) => byFit(a, b) || a.deadline.localeCompare(b.deadline));
+    const relevant = open.filter((i) => i.fit?.level !== "gering");
+    const list = (relevant.length ? relevant : open.length ? open : tenders).slice(0, 5);
 
     // Das Wichtigste der Woche: nach KI-Relevanz, sonst nach Datum, ohne die Top-Meldungen oben
     const leadLinks = new Set(leads.map((l) => l.item.link));
@@ -387,16 +407,23 @@
 
   function renderTenderTable(topic, q) {
     const now = Date.now();
-    const all = filtered(topic);
+    const unfiltered = filtered(topic);
+    const all = unfiltered.filter(fitShown);
     const isOpen = (i) => !!i.deadline && new Date(i.deadline) > now;
     const countries = {};
     const cc = (i) => i.country || "-";
     for (const i of all) countries[cc(i)] = (countries[cc(i)] || 0) + 1;
     if (tenderCountry && !countries[tenderCountry]) tenderCountry = "";
+    const byPub = (a, b) => (b.published || "").localeCompare(a.published || "");
+    const byDue = (a, b) => isOpen(a) ? a.deadline.localeCompare(b.deadline) : byPub(a, b);
     const rows = all.filter((i) => !tenderCountry || cc(i) === tenderCountry)
-      .sort((a, b) => (isOpen(b) - isOpen(a)) ||
-        (isOpen(a) ? a.deadline.localeCompare(b.deadline) : (b.published || "").localeCompare(a.published || "")));
-    const nOpen = all.filter(isOpen).length;
+      .sort(tenderSort === "neu" ? byPub
+        : (a, b) => (isOpen(b) - isOpen(a)) || (tenderSort === "passung" && byFit(a, b)) || byDue(a, b));
+    const fitCount = (l) => unfiltered.filter((i) => i.fit?.level === l).length;
+    const fitChips = unfiltered.some((i) => i.fit) ? `<div class="country-chips fit-chips"><span class="chips-label">Passung</span>${
+      Object.entries(FIT).map(([l, f]) => `<button type="button" data-fit="${l}" aria-pressed="${tenderFit.has(l)}"><span class="fit-dot fit-${l}"></span>${f.label} <b>${fitCount(l)}</b></button>`).join("")}
+      <label class="sort">Sortieren <select data-sort>${SORTS.map(([k, label]) => `<option value="${k}"${k === tenderSort ? " selected" : ""}>${label}</option>`).join("")}</select></label></div>` : "";
+    const nOpen = all.filter(isOpen).length;  // nach Passung gefiltert, wie in der Liste
     const nSoon = all.filter((i) => isOpen(i) && new Date(i.deadline) - now <= 7 * 86400000).length;
     const chip = (c, label, n) => `<button type="button" data-country="${escapeHtml(c)}" aria-pressed="${tenderCountry === c}">${label} <b>${n}</b></button>`;
     const chips = chip("", "Alle Länder", all.length) + Object.entries(countries).sort((a, b) => b[1] - a[1])
@@ -412,9 +439,9 @@
           <a class="item-title" href="${escapeHtml(it.link)}" target="_blank" rel="noopener">${highlight(titleOf(it), q)}</a>
           <div class="item-meta">
             ${isNew(it) ? `<span class="new-dot">● neu</span>` : ""}
-            ${hotBadge(it)}
+            ${fitBadge(it)}
             ${it.buyer ? `<span>${highlight(it.buyer, q)}</span>` : `<span class="src">${favicon(it.domain)}${escapeHtml(it.source)}</span>`}
-            ${categoryOf(it) ? `<span class="cat">${escapeHtml(categoryOf(it))}</span>` : ""}
+            ${it.fit ? fitWhy(it) : categoryOf(it) ? `<span class="cat">${escapeHtml(categoryOf(it))}</span>` : ""}
             ${starBtn(it)}
           </div>
           ${tenderDetails(it)}
@@ -434,25 +461,31 @@
         <span class="count">${nOpen} offen${nSoon ? ` · <b class="warn">${nSoon} Frist ≤ 7 Tage</b>` : ""}</span>
         <button type="button" class="export" data-export="1" title="Als CSV-Datei für Excel herunterladen">⬇ Excel</button>
       </header>
+      ${fitChips}
       <div class="country-chips">${chips}</div>
       ${rows.length ? `<div class="table-wrap"><table class="tenders">
         <thead><tr><th>Land</th><th>Ausschreibung</th><th>Veröffentlicht</th><th>Frist</th></tr></thead>
         <tbody>${rows.map(row).join("")}</tbody></table></div>`
-        : `<p class="empty">${topic.items.length ? "Keine Treffer." : "Gerade keine Ausschreibungen zu ballistischen Helmen."}</p>`}
+        : `<p class="empty">${!topic.items.length ? "Gerade keine Ausschreibungen zu ballistischen Helmen."
+          : unfiltered.length > all.length ? "Keine Treffer mit dieser Passung. Oben unter „Passung“ weitere Stufen einblenden." : "Keine Treffer."}</p>`}
+      ${fitChips ? `<p class="empty small">Passung für Schuberth: Am meisten zählt, ob die M100 die Anforderung erfüllt (NIJ IIIA, VPAM 2, High-/Mid-/Full-Cut;
+        Trainingshelme passen zur T100C). Höhere Schutzklassen am Helm oder Helme im Westen-Paket passen nur teilweise, Riot-, Flieger- und Motorradhelme gar nicht.
+        Danach zählen Auftraggeber (Militär und Polizei vor Kommune oder Firma) und Umfang. Kleinstmengen gelten immer als gering. Fahre über die Stufe, um die Punkte zu sehen.</p>` : ""}
     </section>`;
   }
 
   function exportTenders() {
     const topic = data.topics.find((t) => t.id === "ausschreibungen");
-    const rows = filtered(topic).filter((i) => !tenderCountry || (i.country || "-") === tenderCountry);
+    const rows = filtered(topic).filter((i) => fitShown(i) && (!tenderCountry || (i.country || "-") === tenderCountry));
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const day = (iso) => iso ? iso.slice(0, 10) : "";
     const lines = [["Land", "Titel", "Titel (Deutsch)", "Auftraggeber", "Veröffentlicht", "Frist", "Fristart", "Status", "Verfahrensart",
-      "Schätzwert", "Währung", "Laufzeit", "Menge/Details", "KI-Relevanz", "Quelle", "Link", "Unterlagen", "Kontakt"],
+      "Schätzwert", "Währung", "Laufzeit", "Menge/Details", "Passung", "Passung (Punkte)", "Passung (Gründe)", "KI-Relevanz", "Quelle", "Link", "Unterlagen", "Kontakt"],
       ...rows.map((i) => [i.country, i.title, i.ai?.title_de, i.buyer, day(i.published), day(i.deadline),
         i.deadline ? (i.deadline_kind === "request" ? "Teilnahmeantrag" : "Angebot") : "",
         [i.status, i.status_reason].filter(Boolean).join(": ") || (i.award_link ? "Zuschlag erteilt" : ""),
-        i.procedure_type, i.estimate, i.estimate ? i.currency : "", i.duration, i.ai?.facts, i.ai?.score, i.source, i.link, i.docs, i.contact])];
+        i.procedure_type, i.estimate, i.estimate ? i.currency : "", i.duration, i.ai?.facts,
+        FIT[i.fit?.level]?.label, i.fit?.score, i.fit?.reasons?.join(", "), i.ai?.score, i.source, i.link, i.docs, i.contact])];
     const csv = "\ufeff" + lines.map((r) => r.map(cell).join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -774,6 +807,13 @@
     if (s) { e.preventDefault(); toggleSave(s.dataset.save); return; }
     const c = e.target.closest("button[data-country]");
     if (c) { tenderCountry = c.dataset.country; renderGrid(); return; }
+    const fb = e.target.closest("button[data-fit]");
+    if (fb) {
+      tenderFit.has(fb.dataset.fit) ? tenderFit.delete(fb.dataset.fit) : tenderFit.add(fb.dataset.fit);
+      store.set(FIT_KEY, [...tenderFit].join(","));
+      renderGrid();
+      return;
+    }
     const pf = e.target.closest("button[data-patents]");
     if (pf) { patentFilter = pf.dataset.patents; renderGrid(); return; }
     if (e.target.closest("button[data-export]")) { exportTenders(); return; }
@@ -790,6 +830,12 @@
     if (!data) return;
     const v = parseView(location.hash.slice(1));
     go(() => setView(v.tab, v.sub, v.profile));
+  });
+  document.addEventListener("change", (e) => {
+    if (!e.target.matches("select[data-sort]")) return;
+    tenderSort = e.target.value;
+    store.set(SORT_KEY, tenderSort);
+    renderGrid();
   });
   search.addEventListener("input", refresh);
   onlyNew.addEventListener("change", refresh);

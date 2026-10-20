@@ -31,6 +31,7 @@ from pathlib import Path
 import feedparser
 
 import ai_rate
+import tender_fit
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = ROOT / "sources.json"
@@ -1270,6 +1271,7 @@ def main():
     # Mehr Kandidaten behalten, weil die KI-Bewertung noch irrelevante Meldungen aussortiert
     topics = finalize(cfg, items, limit=MAX_ITEMS_PER_TOPIC * 2)
     ai_cache, ai_msg = ai_rate.rate(topics, ai_cache)
+    tender_fit.apply(topics)
     for t in topics:
         t["items"].sort(key=lambda i: i["published"] or "", reverse=True)
         t["items"] = t["items"][:t.pop("max_items", None) or MAX_ITEMS_PER_TOPIC]

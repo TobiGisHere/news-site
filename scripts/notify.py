@@ -65,6 +65,9 @@ def tender_rows(items, now):
             days = (dl - now).days
             due = f"Frist {fmt_day(it['deadline'])}" + (f" (noch {days} Tage)" if days >= 0 else " (abgelaufen)")
         facts = (it.get("ai") or {}).get("facts")
+        fit = it.get("fit") or {}
+        if fit.get("level"):
+            due = " · ".join(filter(None, [f"Passung {fit['level']}", due]))
         rows.append(f"""<tr><td style="padding:10px 0;border-top:1px solid #e6e3dc;vertical-align:top;font-size:20px;width:34px">{flag(it.get('country'))}</td>
 <td style="padding:10px 0;border-top:1px solid #e6e3dc">
 <a href="{esc(it['link'])}" style="color:#1d1d1b;font-weight:600;text-decoration:none">{esc(title_of(it))}</a><br>
@@ -110,8 +113,10 @@ def digest(data, now):
     week = now - dt.timedelta(days=7)
     recent = lambda i: (parse(i.get("published")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) >= week  # noqa: E731
     score = lambda i: (i.get("ai") or {}).get("score", 5)  # noqa: E731
+    # Passende Ausschreibungen zuerst (Passung aus tender_fit.py), dann nach Frist
+    fit_rank = {"hoch": 0, "mittel": 1, "gering": 2}
     open_tenders = sorted((i for i in topic(data, "ausschreibungen") if parse(i.get("deadline")) and parse(i["deadline"]) > now),
-                          key=lambda i: i["deadline"])
+                          key=lambda i: (fit_rank.get((i.get("fit") or {}).get("level"), 1), i["deadline"]))
     awards = [i for i in topic(data, "zuschlaege") if recent(i)]
     sections = []
     if open_tenders:
