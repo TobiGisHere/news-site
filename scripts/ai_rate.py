@@ -79,10 +79,19 @@ Platten oder Bekleidung ohne eigenes Helm-Los; "schutz" = Einsatz-/Schutzhelme o
 - buyer_type: "militaer" = Streitkräfte, Verteidigungsministerium, Beschaffungsagentur des Militärs, Nationalgarde; \
 "polizei" = Polizei, Grenzschutz, Zoll, Justizvollzug, Gendarmerie, Nachrichtendienste, Innenministerium; \
 "zivil" = Kommune, Feuerwehr, Zivilschutz, Unternehmen, Schule, Krankenhaus, Stiftung.
-- qty: Anzahl der Helme als ganze Zahl, nur wenn genannt, sonst 0."""
+- qty: Anzahl der Helme als ganze Zahl, nur wenn genannt, sonst 0.
+- m100: Passt das Produkt des Lesers? Schuberth M100: ballistischer Gefechtshelm aus Aramid, NIJ IIIA (inkl. Schrauben), \
+VPAM 2 mit 5 cm Randbeschuss, V50 690 m/s nach STANAG 2920, High-/Mid-/Full-Cut, Schienen und NVG-Shroud, Zubehör \
+Mandible (VPAM 2/3), Splitterschutzvisier und ballistisches Visier; Trainingsvariante T100C ohne Beschussschutz. \
+"passt" = gefordert ist ein ballistischer Helm bis NIJ IIIA / VPAM 2 bzw. ukrainische Schutzklasse 1, ein Gefechts- oder \
+Einsatzhelm mit Cut-Angabe oder ein Trainingshelm; "teilweise" = höhere Schutzklasse am Helm (VPAM 3, schwerer \
+Polizeihelm mit Visier) oder Helm nur Teil eines Pakets; "nein" = Gewehrbeschuss am Helm (NIJ III/IV, VPAM 4+), \
+Riot-, Flieger-, Motorrad- oder Entschärferhelm, Dienstleistung; "unklar" = Schutzklasse nicht erkennbar.
+- requirement: geforderte Schutzklasse oder Ausführung am Helm in max. 6 Wörtern (z. B. "NIJ IIIA, High-Cut"), sonst leer."""
 
 TENDER_KINDS = {"helm", "paket", "schutz", "spezial", "service"}
 BUYER_TYPES = {"militaer", "polizei", "zivil"}
+M100_FIT = {"passt", "teilweise", "nein", "unklar"}
 
 TOOL = {
     "name": "bewertung",
@@ -104,6 +113,8 @@ TOOL = {
                         "kind": {"type": "string", "enum": ["helm", "paket", "schutz", "spezial", "service"]},
                         "buyer_type": {"type": "string", "enum": ["militaer", "polizei", "zivil"]},
                         "qty": {"type": "integer", "minimum": 0},
+                        "m100": {"type": "string", "enum": ["passt", "teilweise", "nein", "unklar"]},
+                        "requirement": {"type": "string"},
                     },
                     "required": ["id", "score", "title_de", "summary", "why"],
                 },
@@ -146,6 +157,8 @@ def _parse(results, batch):
                     rec["qty"] = max(0, int(res.get("qty") or 0)) or None
                 except (TypeError, ValueError):
                     rec["qty"] = None
+                rec["m100"] = res.get("m100") if res.get("m100") in M100_FIT else None
+                rec["requirement"] = (res.get("requirement") or "").strip()[:60] or None
     return out
 
 
@@ -194,8 +207,8 @@ def _github_request(url, model, gh_headers, batch, token, max_tokens=4000):
         "messages": [
             {"role": "system", "content": SYSTEM + "\n\nAntworte ausschließlich mit JSON der Form "
              '{"results": [{"id": 0, "score": 7, "title_de": "...", "summary": "...", "why": "...", "facts": "", '
-             '"kind": "helm", "buyer_type": "polizei", "qty": 0}]}, '
-             "genau ein Eintrag je Meldung; kind, buyer_type und qty nur bei Ausschreibungen."},
+             '"kind": "helm", "buyer_type": "polizei", "qty": 0, "m100": "passt", "requirement": "NIJ IIIA"}]}, '
+             "genau ein Eintrag je Meldung; kind, buyer_type, qty, m100 und requirement nur bei Ausschreibungen."},
             {"role": "user", "content": "Bewerte diese Meldungen (eine JSON-Zeile je Meldung):\n" + _lines(batch)},
         ],
     }).encode()
@@ -257,8 +270,8 @@ def rate(topics, cache):
     def needs(it):
         c = cache.get(it["link"])
         # Ältere Bewertungen ohne Übersetzung nachholen; ausgeblendete (nur Score) nicht.
-        # Ausschreibungen ohne Helmtyp und Auftraggeber (für die Passung) ebenfalls einmal neu bewerten.
-        return c is None or ("summary" in c and ("title_de" not in c or (it["topic"] == "ausschreibungen" and "kind" not in c)))
+        # Ausschreibungen ohne Produktpassung (für die Passung) ebenfalls einmal neu bewerten.
+        return c is None or ("summary" in c and ("title_de" not in c or (it["topic"] == "ausschreibungen" and "m100" not in c)))
     todo = [it for it in all_items if needs(it)][:MAX_NEW_PER_RUN]
     batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
     errors = []

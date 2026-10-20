@@ -468,9 +468,9 @@
         <tbody>${rows.map(row).join("")}</tbody></table></div>`
         : `<p class="empty">${!topic.items.length ? "Gerade keine Ausschreibungen zu ballistischen Helmen."
           : unfiltered.length > all.length ? "Keine Treffer mit dieser Passung. Oben unter „Passung“ weitere Stufen einblenden." : "Keine Treffer."}</p>`}
-      ${fitChips ? `<p class="empty small">Passung für Schuberth aus drei Merkmalen: Helmtyp (eigene Helm-Beschaffung vor Westen-Paket, Spezial- oder Riot-Helm),
-        Auftraggeber (Militär und Polizei vor Kommune oder Firma) und Umfang (Stückzahl oder Schätzwert, Rahmenvertrag). Kleinstmengen gelten immer als gering.
-        Fahre über die Stufe, um die Punkte zu sehen.</p>` : ""}
+      ${fitChips ? `<p class="empty small">Passung für Schuberth: Am meisten zählt, ob die M100 die Anforderung erfüllt (NIJ IIIA, VPAM 2, High-/Mid-/Full-Cut;
+        Trainingshelme passen zur T100C). Höhere Schutzklassen am Helm oder Helme im Westen-Paket passen nur teilweise, Riot-, Flieger- und Motorradhelme gar nicht.
+        Danach zählen Auftraggeber (Militär und Polizei vor Kommune oder Firma) und Umfang. Kleinstmengen gelten immer als gering. Fahre über die Stufe, um die Punkte zu sehen.</p>` : ""}
     </section>`;
   }
 
