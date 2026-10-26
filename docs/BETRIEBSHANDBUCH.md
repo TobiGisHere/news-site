@@ -166,8 +166,8 @@ Framework und ohne Build-Schritt.
   Hintergrund: Google Patents hinkt etwa 8 Wochen hinterher, ein neues Ulbrichts-Patent wurde dadurch verpasst.
 - **PR #5 – Technologieradar erweitern** (Werkstoffe, Fertigung, Polster, Kopf-Nacken, Passform): offen seit 11.10.,
   Status mit Tobi klären.
-- **Passwortschutz für die Seite:** Tobi hat ihn angefragt, Optionen liegen vor (u. a. verschlüsselte Daten im
-  öffentlichen Pages-Hosting), Entscheidung von Tobi steht aus. Kostenlos bleiben.
+- **Passwortschutz:** Tobi hat am 26.10.2026 entschieden, dass die Seite ohne Passwort öffentlich bleibt.
+  Umso wichtiger ist die Regel zu vertraulichen Daten (Abschnitt 4).
 - **Aus dem Ausbauplan noch nicht umgesetzt:** gemeinsamer Bieterstatus pro Ausschreibung (beobachten / in Prüfung /
   Angebot in Arbeit / abgegeben / gewonnen / verloren / kein Gebot) und Login. Geplant war Cloudflare Pages + Access
   + D1 (kostenlos), noch nicht begonnen.
