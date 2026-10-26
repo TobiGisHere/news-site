@@ -1,10 +1,13 @@
-# Meine News
+# Helm-Radar
 
-Persönliche News-Seite mit Themen-Kacheln: Ausschreibungen, Wettbewerber, Branche, KI, Weltpolitik.
+Persönliche Marktbeobachtung rund um ballistische Schutzhelme: Ausschreibungen und Zuschläge, Markt (Wettbewerber, Schuberth, Branche), Technik & Normen (Forschung, Patente, Normen) und Geopolitik.
+
+Betrieb, Secrets, offene Punkte und typische Fehler: [docs/BETRIEBSHANDBUCH.md](docs/BETRIEBSHANDBUCH.md). Regeln für KI-Assistenten: [AGENTS.md](AGENTS.md).
 
 ## Aufbau
 - `sources.json`: alle Quellen und Suchbegriffe (hier ändern, um Quellen hinzuzufügen oder zu entfernen).
 - `scripts/fetch_news.py`: ruft alle Quellen ab und schreibt `site/data/news.json`.
+- `scripts/ai_rate.py`: KI-Bewertung über Google Gemini (kostenlos), `scripts/tender_fit.py`: Passung der Ausschreibungen für Schuberth.
 - `site/`: die Website selbst (HTML, CSS, JavaScript, keine Abhängigkeiten).
 - `.github/workflows/update-news.yml`: ruft die Quellen stündlich (6 bis 23 Uhr) ab, verschickt Mails und veröffentlicht die Seite auf GitHub Pages.
 - `scripts/notify.py`: Sofortalarm bei neuen Helm-Ausschreibungen und Wochen-Digest montags ab 8 Uhr per Resend.
